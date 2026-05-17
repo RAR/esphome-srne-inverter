@@ -87,6 +87,13 @@ void SrneModbus::send(uint8_t address, uint8_t function, uint16_t start_register
   this->request_queue_.push(request);
 }
 
+void SrneModbus::send_write_single(uint8_t address, uint16_t register_address, uint16_t value) {
+  // Function 0x06 carries the value in the same two bytes that 0x03 uses for
+  // num_registers, so we can reuse ModbusRequest by stuffing the value there.
+  ModbusRequest request{address, MODBUS_WRITE_SINGLE_REGISTER, register_address, value, {}};
+  this->request_queue_.push(request);
+}
+
 void SrneModbus::send_next_request_() {
   if (this->request_queue_.empty() || this->waiting_for_response_) {
     return;

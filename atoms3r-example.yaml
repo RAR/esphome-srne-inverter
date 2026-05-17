@@ -200,6 +200,26 @@ switch:
   - platform: restart
     name: "Restart"
 
+# Writable settings — exposed via Modbus function 0x06. Optional; only the
+# entities you configure get polled (settings poll runs every ~5 minutes).
+select:
+  - platform: srne_inverter
+    srne_inverter_id: inv0
+    output_priority:
+      name: "Output Priority"
+    charge_priority:
+      name: "Charge Priority"
+
+number:
+  - platform: srne_inverter
+    srne_inverter_id: inv0
+    max_charge_current:
+      name: "Max Charge Current"
+    mains_charge_current_limit:
+      name: "Mains Charge Current Limit"
+    output_voltage:
+      name: "Output Voltage"
+
 # AtomS3R LCD: ST7789V 128x128 over SPI
 spi:
   clk_pin: GPIO15

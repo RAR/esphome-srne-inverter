@@ -31,6 +31,8 @@ class SrneModbus : public uart::UARTDevice, public Component {
   void register_device(SrneModbusDevice *device) { this->devices_.push_back(device); }
 
   void send(uint8_t address, uint8_t function, uint16_t start_register, uint16_t num_registers);
+  // Function 0x06: write a single 16-bit register.
+  void send_write_single(uint8_t address, uint16_t register_address, uint16_t value);
 
  protected:
   bool parse_modbus_byte_(uint8_t byte);
@@ -70,6 +72,9 @@ class SrneModbusDevice {
 
   void send(uint8_t function, uint16_t start_register, uint16_t num_registers) {
     this->parent_->send(this->address_, function, start_register, num_registers);
+  }
+  void send_write_single(uint16_t register_address, uint16_t value) {
+    this->parent_->send_write_single(this->address_, register_address, value);
   }
 
  protected:

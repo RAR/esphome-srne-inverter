@@ -29,6 +29,15 @@ Read-only support for battery, PV, grid, inverter, load, heatsink temperatures, 
 ### Text sensors
 - `machine_state`, `charge_state`, `fault_codes`, `software_version`, `hardware_version`, `serial_number`
 
+### Writable settings (Modbus function 0x06)
+- `select.output_priority` — Solar / Line / SBU
+- `select.charge_priority` — PV preferred / Mains preferred / Hybrid / PV only
+- `number.max_charge_current` — 0–150 A
+- `number.mains_charge_current_limit` — 0–100 A
+- `number.output_voltage` — 100–264 V
+
+Settings are read back every ~5 min so HA reflects whatever was set from the inverter's keypad or another controller. When you change a control in HA the value is sent immediately and shown optimistically; the next read confirms it.
+
 ## Protocol
 
 Implements SRNE's Modbus RTU framing at 9600 8N1 (function `0x03` reads). See [REGISTER_MAP.md](REGISTER_MAP.md) for the subset of registers we decode and `srne-hybrid-solar-inverter-modbus-protocol-v1-7.pdf` for the upstream spec.

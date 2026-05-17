@@ -4,6 +4,8 @@
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
+#include "esphome/components/number/number.h"
+#include "esphome/components/select/select.h"
 #include "esphome/components/srne_modbus/srne_modbus.h"
 #include <queue>
 
@@ -66,6 +68,21 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void set_hardware_version_text_sensor(text_sensor::TextSensor *s) { hardware_version_text_sensor_ = s; }
   void set_serial_number_text_sensor(text_sensor::TextSensor *s) { serial_number_text_sensor_ = s; }
 
+  // Selects (write-back via Modbus function 0x06)
+  void set_output_priority_select(select::Select *s) { output_priority_select_ = s; }
+  void set_charge_priority_select(select::Select *s) { charge_priority_select_ = s; }
+
+  // Numbers (write-back via Modbus function 0x06)
+  void set_max_charge_current_number(number::Number *n) { max_charge_current_number_ = n; }
+  void set_mains_charge_current_limit_number(number::Number *n) { mains_charge_current_limit_number_ = n; }
+  void set_output_voltage_number(number::Number *n) { output_voltage_number_ = n; }
+
+  // Exposed so the SrneSelect / SrneNumber subclasses can ask the hub to
+  // write back a value when the user changes a control in HA.
+  void write_register(uint16_t register_address, uint16_t value) {
+    this->send_write_single(register_address, value);
+  }
+
  protected:
   // Block A storage
   sensor::Sensor *battery_soc_sensor_{nullptr};
@@ -112,6 +129,15 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   text_sensor::TextSensor *hardware_version_text_sensor_{nullptr};
   text_sensor::TextSensor *serial_number_text_sensor_{nullptr};
 
+  // Selects (writable, read back from settings block F1/F2)
+  select::Select *output_priority_select_{nullptr};
+  select::Select *charge_priority_select_{nullptr};
+
+  // Numbers (writable, read back from settings block F1/F2)
+  number::Number *max_charge_current_number_{nullptr};
+  number::Number *mains_charge_current_limit_number_{nullptr};
+  number::Number *output_voltage_number_{nullptr};
+
   uint8_t no_response_count_{0};
   uint32_t update_counter_{0};
   std::queue<uint8_t> expected_steps_;
@@ -125,9 +151,44 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void decode_block_c_(const uint8_t *payload, size_t byte_count);
   void decode_block_d_(const uint8_t *payload, size_t byte_count);
   void decode_block_e_(const uint8_t *payload, size_t byte_count);
+  void decode_block_f1_(const uint8_t *payload, size_t byte_count);
+  void decode_block_f2_(const uint8_t *payload, size_t byte_count);
   std::string decode_machine_state_(uint16_t state);
   std::string decode_charge_state_(uint16_t state);
   std::string extract_low_byte_string_(const uint8_t *data, size_t length);
+};
+
+// Generic select wired to a single Modbus register. Options are indexed by
+// position — option[0] writes raw 0, option[1] writes raw 1, etc. Matches the
+// SRNE convention for output_priority / charge_priority / etc.
+class SrneSelect : public select::Select, public Component {
+ public:
+  void set_parent(SrneInverter *parent) { parent_ = parent; }
+  void set_register(uint16_t reg) { register_ = reg; }
+  void control(const std::string &value) override;
+  // Called by the parent decoder when a fresh raw value is read back.
+  void publish_from_raw(uint16_t raw);
+
+ protected:
+  SrneInverter *parent_{nullptr};
+  uint16_t register_{0};
+};
+
+// Generic number wired to a single Modbus register with a scale factor.
+// scale=0.1 means HA value 14.4 → raw 144 on the wire (matches SRNE's
+// "multiplier 10" voltage/current convention).
+class SrneNumber : public number::Number, public Component {
+ public:
+  void set_parent(SrneInverter *parent) { parent_ = parent; }
+  void set_register(uint16_t reg) { register_ = reg; }
+  void set_scale(float scale) { scale_ = scale; }
+  void control(float value) override;
+  void publish_from_raw(uint16_t raw);
+
+ protected:
+  SrneInverter *parent_{nullptr};
+  uint16_t register_{0};
+  float scale_{1.0f};
 };
 
 }  // namespace srne_inverter

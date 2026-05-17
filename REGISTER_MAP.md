@@ -72,3 +72,17 @@ Format: raw value 100 → "v1.00", 145 → "v1.45".
 ## Block E — serial number (`0x0035`–`0x0048`, 20 regs, polled every 30 cycles)
 
 ASCII string, low byte of each register is valid (high byte is padding). Trimmed of trailing spaces/nulls. Sensor: `serial_number`.
+
+## Blocks F1 / F2 / F3 — writable settings (polled every 30 cycles, only if any setting entity is configured)
+
+Block F* registers back the current value of any writable setting the user exposed via `select:` or `number:`. Writes go out via Modbus function `0x06` (write single register). Settings are re-read every ~5 min — if you change a setting in HA, the UI updates optimistically and the next F-block read confirms.
+
+| Reg | Name | Block | Type | Mult | Range | Entity |
+|---|---|---|---|---|---|---|
+| 0xE204 | Output priority | F1 | enum | — | 0 Solar / 1 Line / 2 SBU | `select.output_priority` |
+| 0xE205 | Mains charge current limit | F1 | u16 | 0.1 | 0–100 A | `number.mains_charge_current_limit` |
+| 0xE208 | Output voltage | F2 | u16 | 0.1 | 100–264 V | `number.output_voltage` |
+| 0xE20A | Maximum charge current | F2 | u16 | 0.1 | 0–150 A | `number.max_charge_current` |
+| 0xE20F | Charge priority | F3 | enum | — | 0 PV pref / 1 Mains pref / 2 Hybrid / 3 PV only | `select.charge_priority` |
+
+The F-blocks are split (F1 = `0xE204..E205`, F2 = `0xE208..E20A`, F3 = `0xE20F` alone) to skip the gray-for-inverter registers in between (`0xE206 equalizing-enable` and `0xE207 power-save-level`) which can cause silent timeouts on some firmware.

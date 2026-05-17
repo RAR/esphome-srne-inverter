@@ -47,6 +47,38 @@ static const uint8_t BLOCK_E_BYTE_COUNT = 0x28;
 static const uint8_t MAX_NO_RESPONSE_COUNT = 5;
 static const uint32_t PRODUCT_INFO_INTERVAL = 30;  // every N update cycles
 
+// Block F1: 0xE204..0xE205 (2 regs) — output_priority + mains_charge_current_limit
+static const uint16_t REG_BLOCK_F1_START = 0xE204;
+static const uint16_t REG_BLOCK_F1_COUNT = 0x02;
+static const uint8_t BLOCK_F1_BYTE_COUNT = 0x04;
+
+// Block F2: 0xE208..0xE20A (3 regs) — output_voltage + output_frequency + max_charge_current
+// (skips 0xE206 equalizing-enable, 0xE207 power-save-level which is gray on inverters)
+static const uint16_t REG_BLOCK_F2_START = 0xE208;
+static const uint16_t REG_BLOCK_F2_COUNT = 0x03;
+static const uint8_t BLOCK_F2_BYTE_COUNT = 0x06;
+
+// Block F3: 0xE20F (1 reg) — charge_priority (separate because we skip E20B-E20E ranges)
+static const uint16_t REG_BLOCK_F3_START = 0xE20F;
+static const uint16_t REG_BLOCK_F3_COUNT = 0x01;
+static const uint8_t BLOCK_F3_BYTE_COUNT = 0x02;
+
+// Settings registers we may write to (function 0x06)
+static const uint16_t REG_OUTPUT_PRIORITY = 0xE204;
+static const uint16_t REG_MAINS_CHARGE_CURRENT_LIMIT = 0xE205;
+static const uint16_t REG_OUTPUT_VOLTAGE = 0xE208;
+static const uint16_t REG_MAX_CHARGE_CURRENT = 0xE20A;
+static const uint16_t REG_CHARGE_PRIORITY = 0xE20F;
+
+// Defined here so the on_modbus_data dispatch (which uses get_u16 for the
+// single-register F3 block) can see them.
+static inline uint16_t get_u16(const uint8_t *p, size_t i) {
+  return (uint16_t(p[i]) << 8) | uint16_t(p[i + 1]);
+}
+static inline int16_t get_i16(const uint8_t *p, size_t i) {
+  return (int16_t) get_u16(p, i);
+}
+
 void SrneInverter::dump_config() {
   ESP_LOGCONFIG(TAG, "SRNE Inverter:");
   ESP_LOGCONFIG(TAG, "  Address: 0x%02X", this->address_);
@@ -74,6 +106,16 @@ void SrneInverter::dump_config() {
   LOG_TEXT_SENSOR("  ", "Software", this->software_version_text_sensor_);
   LOG_TEXT_SENSOR("  ", "Hardware", this->hardware_version_text_sensor_);
   LOG_TEXT_SENSOR("  ", "Serial", this->serial_number_text_sensor_);
+  if (this->output_priority_select_ != nullptr)
+    ESP_LOGCONFIG(TAG, "  Output Priority Select: configured");
+  if (this->charge_priority_select_ != nullptr)
+    ESP_LOGCONFIG(TAG, "  Charge Priority Select: configured");
+  if (this->max_charge_current_number_ != nullptr)
+    ESP_LOGCONFIG(TAG, "  Max Charge Current Number: configured");
+  if (this->mains_charge_current_limit_number_ != nullptr)
+    ESP_LOGCONFIG(TAG, "  Mains Charge Current Limit Number: configured");
+  if (this->output_voltage_number_ != nullptr)
+    ESP_LOGCONFIG(TAG, "  Output Voltage Number: configured");
 }
 
 float SrneInverter::get_setup_priority() const { return setup_priority::DATA; }
@@ -113,6 +155,26 @@ void SrneInverter::update() {
     if (want_e) {
       this->expected_steps_.push(5);
       this->send(FUNCTION_READ_HOLDING, REG_BLOCK_E_START, REG_BLOCK_E_COUNT);
+    }
+
+    // Read writable settings back so HA shows the current values. Skip
+    // entirely if the user didn't configure any of the settings entities.
+    bool want_f1 = this->output_priority_select_ != nullptr ||
+                   this->mains_charge_current_limit_number_ != nullptr;
+    bool want_f2 = this->output_voltage_number_ != nullptr ||
+                   this->max_charge_current_number_ != nullptr;
+    bool want_f3 = this->charge_priority_select_ != nullptr;
+    if (want_f1) {
+      this->expected_steps_.push(6);
+      this->send(FUNCTION_READ_HOLDING, REG_BLOCK_F1_START, REG_BLOCK_F1_COUNT);
+    }
+    if (want_f2) {
+      this->expected_steps_.push(7);
+      this->send(FUNCTION_READ_HOLDING, REG_BLOCK_F2_START, REG_BLOCK_F2_COUNT);
+    }
+    if (want_f3) {
+      this->expected_steps_.push(8);
+      this->send(FUNCTION_READ_HOLDING, REG_BLOCK_F3_START, REG_BLOCK_F3_COUNT);
     }
   }
   this->update_counter_++;
@@ -179,14 +241,25 @@ void SrneInverter::on_modbus_data(const std::vector<uint8_t> &data) {
     case 5:
       if (byte_count == BLOCK_E_BYTE_COUNT) this->decode_block_e_(payload, byte_count);
       break;
+    case 6:
+      if (byte_count == BLOCK_F1_BYTE_COUNT) this->decode_block_f1_(payload, byte_count);
+      break;
+    case 7:
+      if (byte_count == BLOCK_F2_BYTE_COUNT) this->decode_block_f2_(payload, byte_count);
+      break;
+    case 8:
+      if (byte_count == BLOCK_F3_BYTE_COUNT) {
+        // F3 is a single register — feed it straight into the charge_priority select.
+        if (this->charge_priority_select_ != nullptr) {
+          static_cast<SrneSelect *>(this->charge_priority_select_)->publish_from_raw(get_u16(payload, 0));
+        }
+      }
+      break;
   }
-}
 
-static inline uint16_t get_u16(const uint8_t *p, size_t i) {
-  return (uint16_t(p[i]) << 8) | uint16_t(p[i + 1]);
-}
-static inline int16_t get_i16(const uint8_t *p, size_t i) {
-  return (int16_t) get_u16(p, i);
+  // A successful function-0x06 write echoes back [addr, 0x06, reg_hi, reg_lo,
+  // val_hi, val_lo, crc, crc]. We don't currently re-publish from the echo —
+  // the next F1/F2/F3 read (≤5 min away) is the authoritative re-sync.
 }
 
 void SrneInverter::decode_block_a_(const uint8_t *p, size_t /*byte_count*/) {
@@ -355,6 +428,69 @@ std::string SrneInverter::extract_low_byte_string_(const uint8_t *data, size_t l
   }
   while (!result.empty() && result.back() == ' ') result.pop_back();
   return result;
+}
+
+void SrneInverter::decode_block_f1_(const uint8_t *p, size_t byte_count) {
+  if (byte_count < BLOCK_F1_BYTE_COUNT) return;
+  // 0xE204 output_priority (1 reg), 0xE205 mains_charge_current_limit (0.1 A)
+  uint16_t output_priority = get_u16(p, 0);
+  uint16_t mains_limit = get_u16(p, 2);
+  if (this->output_priority_select_ != nullptr) {
+    static_cast<SrneSelect *>(this->output_priority_select_)->publish_from_raw(output_priority);
+  }
+  if (this->mains_charge_current_limit_number_ != nullptr) {
+    static_cast<SrneNumber *>(this->mains_charge_current_limit_number_)->publish_from_raw(mains_limit);
+  }
+}
+
+void SrneInverter::decode_block_f2_(const uint8_t *p, size_t byte_count) {
+  if (byte_count < BLOCK_F2_BYTE_COUNT) return;
+  // 0xE208 output_voltage (0.1 V), 0xE209 output_frequency (0.01 Hz, not exposed), 0xE20A max_charge_current (0.1 A)
+  uint16_t output_voltage = get_u16(p, 0);
+  uint16_t max_charge = get_u16(p, 4);
+  if (this->output_voltage_number_ != nullptr) {
+    static_cast<SrneNumber *>(this->output_voltage_number_)->publish_from_raw(output_voltage);
+  }
+  if (this->max_charge_current_number_ != nullptr) {
+    static_cast<SrneNumber *>(this->max_charge_current_number_)->publish_from_raw(max_charge);
+  }
+}
+
+// --- SrneSelect / SrneNumber ---
+
+void SrneSelect::control(const std::string &value) {
+  auto &options = this->traits.get_options();
+  for (size_t i = 0; i < options.size(); i++) {
+    if (options[i] == value) {
+      ESP_LOGD("srne_select", "Writing 0x%04X = %u (%s)", this->register_, (unsigned) i, value.c_str());
+      this->parent_->write_register(this->register_, static_cast<uint16_t>(i));
+      this->publish_state(value);  // optimistic; next F-block read confirms
+      return;
+    }
+  }
+  ESP_LOGW("srne_select", "Unknown option '%s' for register 0x%04X", value.c_str(), this->register_);
+}
+
+void SrneSelect::publish_from_raw(uint16_t raw) {
+  auto &options = this->traits.get_options();
+  if (raw < options.size()) {
+    this->publish_state(options[raw]);
+  } else {
+    ESP_LOGW("srne_select", "Raw value %u out of range for register 0x%04X (%u options)",
+             raw, this->register_, (unsigned) options.size());
+  }
+}
+
+void SrneNumber::control(float value) {
+  // HA-side value → raw register. scale=0.1 means raw = value/0.1 = value*10.
+  uint16_t raw = static_cast<uint16_t>((value / this->scale_) + 0.5f);
+  ESP_LOGD("srne_number", "Writing 0x%04X = %u (%.2f)", this->register_, raw, value);
+  this->parent_->write_register(this->register_, raw);
+  this->publish_state(value);  // optimistic
+}
+
+void SrneNumber::publish_from_raw(uint16_t raw) {
+  this->publish_state(static_cast<float>(raw) * this->scale_);
 }
 
 std::string SrneInverter::decode_charge_state_(uint16_t state) {
