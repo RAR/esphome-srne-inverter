@@ -149,7 +149,7 @@ sensor:
       name: "Charge Power"
       id: inv_charge_power
 
-    bus_voltage: { name: "Bus Voltage" }
+    bus_voltage: { name: "Bus Voltage", entity_category: diagnostic }
     grid_voltage:
       name: "Grid Voltage"
       id: inv_grid_voltage
