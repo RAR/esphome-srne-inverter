@@ -13,6 +13,11 @@ static const uint16_t REG_BLOCK_A_START = 0x0100;
 static const uint16_t REG_BLOCK_A_COUNT = 0x12;
 static const uint8_t BLOCK_A_BYTE_COUNT = 0x24;
 
+// Block B: inverter — 0x0210..0x0224 (21 regs, 42 bytes)
+static const uint16_t REG_BLOCK_B_START = 0x0210;
+static const uint16_t REG_BLOCK_B_COUNT = 0x15;
+static const uint8_t BLOCK_B_BYTE_COUNT = 0x2A;
+
 void SrneInverter::dump_config() {
   ESP_LOGCONFIG(TAG, "SRNE Inverter:");
   ESP_LOGCONFIG(TAG, "  Address: 0x%02X", this->address_);
@@ -27,14 +32,19 @@ void SrneInverter::dump_config() {
   LOG_SENSOR("  ", "PV2 W", this->pv2_power_sensor_);
   LOG_SENSOR("  ", "PV Total W", this->pv_total_power_sensor_);
   LOG_SENSOR("  ", "Charge W", this->charge_power_sensor_);
+  LOG_SENSOR("  ", "Bus V", this->bus_voltage_sensor_);
+  LOG_SENSOR("  ", "Grid V", this->grid_voltage_sensor_);
+  LOG_SENSOR("  ", "Inverter V", this->inverter_voltage_sensor_);
+  LOG_SENSOR("  ", "Load W", this->load_active_power_sensor_);
 }
 
 float SrneInverter::get_setup_priority() const { return setup_priority::DATA; }
 
 void SrneInverter::update() {
-  // For now, only block A. Block B/C/D/E added in later tasks.
-  this->last_request_step_ = 0;
+  this->expected_steps_.push(0);
   this->send(FUNCTION_READ_HOLDING, REG_BLOCK_A_START, REG_BLOCK_A_COUNT);
+  this->expected_steps_.push(1);
+  this->send(FUNCTION_READ_HOLDING, REG_BLOCK_B_START, REG_BLOCK_B_COUNT);
 }
 
 void SrneInverter::on_modbus_data(const std::vector<uint8_t> &data) {
@@ -47,27 +57,32 @@ void SrneInverter::on_modbus_data(const std::vector<uint8_t> &data) {
 
   if ((function & 0x80) != 0) {
     ESP_LOGW(TAG, "Modbus error response: 0x%02X", data[2]);
+    if (!this->expected_steps_.empty()) this->expected_steps_.pop();
     return;
   }
 
-  if (function != FUNCTION_READ_HOLDING) {
-    return;
-  }
+  if (function != FUNCTION_READ_HOLDING) return;
 
   uint8_t byte_count = data[2];
-  if (data.size() < (size_t)(3 + byte_count + 2)) {
-    ESP_LOGW(TAG, "Truncated response");
+  if (data.size() < (size_t)(3 + byte_count + 2)) return;
+
+  if (this->expected_steps_.empty()) {
+    ESP_LOGW(TAG, "Unexpected response (no queued step)");
     return;
   }
+
+  uint8_t step = this->expected_steps_.front();
+  this->expected_steps_.pop();
 
   const uint8_t *payload = data.data() + 3;
 
-  // Dispatch by (request_step, byte_count). For now only block A.
-  if (this->last_request_step_ == 0 && byte_count == BLOCK_A_BYTE_COUNT) {
-    this->decode_block_a_(payload, byte_count);
-  } else {
-    ESP_LOGW(TAG, "Unexpected response: step=%u byte_count=%u",
-             this->last_request_step_, byte_count);
+  switch (step) {
+    case 0:
+      if (byte_count == BLOCK_A_BYTE_COUNT) this->decode_block_a_(payload, byte_count);
+      break;
+    case 1:
+      if (byte_count == BLOCK_B_BYTE_COUNT) this->decode_block_b_(payload, byte_count);
+      break;
   }
 }
 
@@ -99,6 +114,34 @@ void SrneInverter::decode_block_a_(const uint8_t *p, size_t /*byte_count*/) {
   uint16_t pv2_w = get_u16(p, 34);
   this->publish_state_(this->pv2_power_sensor_, (float) pv2_w);
   this->publish_state_(this->pv_total_power_sensor_, (float) (pv1_w + pv2_w));
+}
+
+void SrneInverter::decode_block_b_(const uint8_t *p, size_t byte_count) {
+  if (byte_count < BLOCK_B_BYTE_COUNT) return;
+  // Offsets from 0x0210:
+  // 0x0210 state (text), 0x0211 password mark (skip)
+  // 0x0212 bus V, 0x0213 grid V, 0x0214 grid I, 0x0215 grid Hz x0.01
+  this->publish_state_(this->bus_voltage_sensor_, get_u16(p, 4) * 0.1f);
+  this->publish_state_(this->grid_voltage_sensor_, get_u16(p, 6) * 0.1f);
+  this->publish_state_(this->grid_current_sensor_, get_u16(p, 8) * 0.1f);
+  this->publish_state_(this->grid_frequency_sensor_, get_u16(p, 10) * 0.01f);
+  // 0x0216 inverter V, 0x0217 inverter I, 0x0218 inverter Hz x0.01
+  this->publish_state_(this->inverter_voltage_sensor_, get_u16(p, 12) * 0.1f);
+  this->publish_state_(this->inverter_current_sensor_, get_u16(p, 14) * 0.1f);
+  this->publish_state_(this->inverter_frequency_sensor_, get_u16(p, 16) * 0.01f);
+  // 0x0219 load I, 0x021A load PF (gray skip), 0x021B load W, 0x021C load VA, 0x021D DC component (gray skip)
+  this->publish_state_(this->load_current_sensor_, get_u16(p, 18) * 0.1f);
+  this->publish_state_(this->load_active_power_sensor_, (float) get_u16(p, 22));
+  this->publish_state_(this->load_apparent_power_sensor_, (float) get_u16(p, 24));
+  // 0x021E battery charge I, 0x021F load %
+  this->publish_state_(this->battery_charge_current_sensor_, get_u16(p, 28) * 0.1f);
+  this->publish_state_(this->load_percent_sensor_, (float) get_u16(p, 30));
+  // 0x0220-0x0222 heatsinks A/B/C (signed, x0.1), 0x0223 D (gray skip)
+  this->publish_state_(this->heatsink_a_temperature_sensor_, get_i16(p, 32) * 0.1f);
+  this->publish_state_(this->heatsink_b_temperature_sensor_, get_i16(p, 34) * 0.1f);
+  this->publish_state_(this->heatsink_c_temperature_sensor_, get_i16(p, 36) * 0.1f);
+  // 0x0224 PV charge I
+  this->publish_state_(this->pv_charge_current_sensor_, get_u16(p, 40) * 0.1f);
 }
 
 void SrneInverter::publish_state_(sensor::Sensor *s, float value) {
