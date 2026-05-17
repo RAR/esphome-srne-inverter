@@ -204,6 +204,11 @@ switch:
   - platform: restart
     name: "Restart"
 
+  - platform: srne_inverter
+    srne_inverter_id: inv0
+    eco_mode:
+      name: "Eco Mode"
+
 # Writable settings — exposed via Modbus function 0x06. Optional; only the
 # entities you configure get polled (settings poll runs every ~5 minutes).
 select:

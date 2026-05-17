@@ -6,6 +6,7 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
+#include "esphome/components/switch/switch.h"
 #include "esphome/components/srne_modbus/srne_modbus.h"
 #include <queue>
 
@@ -81,6 +82,9 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void set_mains_charge_current_limit_number(number::Number *n) { mains_charge_current_limit_number_ = n; }
   void set_output_voltage_number(number::Number *n) { output_voltage_number_ = n; }
 
+  // Switches (write-back via Modbus function 0x06; on=1, off=0)
+  void set_eco_mode_switch(switch_::Switch *s) { eco_mode_switch_ = s; }
+
   // Exposed so the SrneSelect / SrneNumber subclasses can ask the hub to
   // write back a value when the user changes a control in HA.
   void write_register(uint16_t register_address, uint16_t value) {
@@ -144,6 +148,9 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   number::Number *mains_charge_current_limit_number_{nullptr};
   number::Number *output_voltage_number_{nullptr};
 
+  // Switches (writable, read back from settings block F4)
+  switch_::Switch *eco_mode_switch_{nullptr};
+
   uint8_t no_response_count_{0};
   uint32_t update_counter_{0};
   std::queue<uint8_t> expected_steps_;
@@ -166,6 +173,7 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void decode_block_b0_(const uint8_t *payload, size_t byte_count);
   void decode_block_b1_(const uint8_t *payload, size_t byte_count);
   void decode_block_b2_(const uint8_t *payload, size_t byte_count);
+  void decode_block_f4_(const uint8_t *payload, size_t byte_count);
   void decode_block_c_(const uint8_t *payload, size_t byte_count);
   void decode_block_d_(const uint8_t *payload, size_t byte_count);
   void decode_block_e_(const uint8_t *payload, size_t byte_count);
@@ -207,6 +215,19 @@ class SrneNumber : public number::Number, public Component {
   SrneInverter *parent_{nullptr};
   uint16_t register_{0};
   float scale_{1.0f};
+};
+
+// Generic switch wired to a single Modbus register. ON writes 1, OFF writes 0.
+class SrneSwitch : public switch_::Switch, public Component {
+ public:
+  void set_parent(SrneInverter *parent) { parent_ = parent; }
+  void set_register(uint16_t reg) { register_ = reg; }
+  void write_state(bool state) override;
+  void publish_from_raw(uint16_t raw);
+
+ protected:
+  SrneInverter *parent_{nullptr};
+  uint16_t register_{0};
 };
 
 }  // namespace srne_inverter

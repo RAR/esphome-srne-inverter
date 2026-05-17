@@ -71,11 +71,17 @@ static const uint16_t REG_BLOCK_F3_START = 0xE20F;
 static const uint16_t REG_BLOCK_F3_COUNT = 0x01;
 static const uint8_t BLOCK_F3_BYTE_COUNT = 0x02;
 
+// Block F4: 0xE20C (1 reg) — eco_mode (binary 0/1)
+static const uint16_t REG_BLOCK_F4_START = 0xE20C;
+static const uint16_t REG_BLOCK_F4_COUNT = 0x01;
+static const uint8_t BLOCK_F4_BYTE_COUNT = 0x02;
+
 // Settings registers we may write to (function 0x06)
 static const uint16_t REG_OUTPUT_PRIORITY = 0xE204;
 static const uint16_t REG_MAINS_CHARGE_CURRENT_LIMIT = 0xE205;
 static const uint16_t REG_OUTPUT_VOLTAGE = 0xE208;
 static const uint16_t REG_MAX_CHARGE_CURRENT = 0xE20A;
+static const uint16_t REG_ECO_MODE = 0xE20C;
 static const uint16_t REG_CHARGE_PRIORITY = 0xE20F;
 
 // Sentinel step id for register-scan replies (anything not in 0..8 normal steps).
@@ -193,6 +199,7 @@ void SrneInverter::update() {
     bool want_f2 = this->output_voltage_number_ != nullptr ||
                    this->max_charge_current_number_ != nullptr;
     bool want_f3 = this->charge_priority_select_ != nullptr;
+    bool want_f4 = this->eco_mode_switch_ != nullptr;
     if (want_f1) {
       this->expected_steps_.push(6);
       this->send(FUNCTION_READ_HOLDING, REG_BLOCK_F1_START, REG_BLOCK_F1_COUNT);
@@ -204,6 +211,10 @@ void SrneInverter::update() {
     if (want_f3) {
       this->expected_steps_.push(8);
       this->send(FUNCTION_READ_HOLDING, REG_BLOCK_F3_START, REG_BLOCK_F3_COUNT);
+    }
+    if (want_f4) {
+      this->expected_steps_.push(10);
+      this->send(FUNCTION_READ_HOLDING, REG_BLOCK_F4_START, REG_BLOCK_F4_COUNT);
     }
   }
   this->update_counter_++;
@@ -323,6 +334,9 @@ void SrneInverter::on_modbus_data(const std::vector<uint8_t> &data) {
       break;
     case 9:
       if (byte_count == BLOCK_B0_BYTE_COUNT) this->decode_block_b0_(payload, byte_count);
+      break;
+    case 10:
+      if (byte_count == BLOCK_F4_BYTE_COUNT) this->decode_block_f4_(payload, byte_count);
       break;
   }
 
@@ -537,6 +551,14 @@ void SrneInverter::decode_block_f2_(const uint8_t *p, size_t byte_count) {
   }
 }
 
+void SrneInverter::decode_block_f4_(const uint8_t *p, size_t byte_count) {
+  if (byte_count < BLOCK_F4_BYTE_COUNT) return;
+  // 0xE20C eco_mode (1 reg, 0=off / 1=on)
+  if (this->eco_mode_switch_ != nullptr) {
+    static_cast<SrneSwitch *>(this->eco_mode_switch_)->publish_from_raw(get_u16(p, 0));
+  }
+}
+
 // --- Register-space scan ---
 
 void SrneInverter::queue_scan_() {
@@ -612,6 +634,17 @@ void SrneNumber::control(float value) {
 
 void SrneNumber::publish_from_raw(uint16_t raw) {
   this->publish_state(static_cast<float>(raw) * this->scale_);
+}
+
+void SrneSwitch::write_state(bool state) {
+  uint16_t raw = state ? 1 : 0;
+  ESP_LOGD("srne_switch", "Writing 0x%04X = %u (%s)", this->register_, raw, state ? "ON" : "OFF");
+  this->parent_->write_register(this->register_, raw);
+  this->publish_state(state);  // optimistic; next F-block read confirms
+}
+
+void SrneSwitch::publish_from_raw(uint16_t raw) {
+  this->publish_state(raw != 0);
 }
 
 std::string SrneInverter::decode_charge_state_(uint16_t state) {
