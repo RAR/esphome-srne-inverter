@@ -35,6 +35,7 @@ class SrneModbus : public uart::UARTDevice, public Component {
  protected:
   bool parse_modbus_byte_(uint8_t byte);
   void send_next_request_();
+  void notify_timeout_();
 
   GPIOPin *flow_control_pin_{nullptr};
   std::vector<uint8_t> rx_buffer_;
@@ -43,6 +44,13 @@ class SrneModbus : public uart::UARTDevice, public Component {
   std::vector<SrneModbusDevice *> devices_;
   std::queue<ModbusRequest> request_queue_;
   bool waiting_for_response_{false};
+
+  // Tracks the request currently on the wire, so we can tell the matching
+  // device when it times out and log which register failed.
+  uint8_t in_flight_address_{0};
+  uint8_t in_flight_function_{0};
+  uint16_t in_flight_register_{0};
+  uint16_t in_flight_count_{0};
 };
 
 uint16_t crc16_modbus(const uint8_t *data, uint16_t len);
@@ -54,6 +62,10 @@ class SrneModbusDevice {
   uint8_t get_address() const { return address_; }
 
   virtual void on_modbus_data(const std::vector<uint8_t> &data) = 0;
+  // Called by the hub when a request to this device's address times out.
+  // Default no-op; devices that pipeline requests should override to drop
+  // their per-request tracking so they stay in sync with the response stream.
+  virtual void on_modbus_timeout() {}
 
   void send(uint8_t function, uint16_t start_register, uint16_t num_registers) {
     this->parent_->send(this->address_, function, start_register, num_registers);

@@ -19,6 +19,7 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   float get_setup_priority() const override;
 
   void on_modbus_data(const std::vector<uint8_t> &data) override;
+  void on_modbus_timeout() override;
 
   // Block A sensors
   void set_battery_soc_sensor(sensor::Sensor *s) { battery_soc_sensor_ = s; }

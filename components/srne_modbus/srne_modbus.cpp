@@ -35,14 +35,20 @@ void SrneModbus::loop() {
 
   if (this->waiting_for_response_ && !this->rx_buffer_.empty() &&
       (now - this->last_modbus_byte_ > SRNE_MODBUS_RESPONSE_TIMEOUT)) {
-    ESP_LOGW(TAG, "Modbus response timeout (partial frame)");
+    ESP_LOGW(TAG, "Modbus response timeout (partial frame) for 0x%02X fn 0x%02X reg 0x%04X cnt %u",
+             this->in_flight_address_, this->in_flight_function_,
+             this->in_flight_register_, this->in_flight_count_);
     this->rx_buffer_.clear();
+    this->notify_timeout_();
     this->waiting_for_response_ = false;
   }
 
   if (this->waiting_for_response_ && this->rx_buffer_.empty() &&
       (now - this->last_send_ > SRNE_MODBUS_RESPONSE_TIMEOUT)) {
-    ESP_LOGW(TAG, "No Modbus response received");
+    ESP_LOGW(TAG, "No Modbus response from 0x%02X for reg 0x%04X (fn 0x%02X, cnt %u)",
+             this->in_flight_address_, this->in_flight_register_,
+             this->in_flight_function_, this->in_flight_count_);
+    this->notify_timeout_();
     this->waiting_for_response_ = false;
   }
 
@@ -112,6 +118,18 @@ void SrneModbus::send_next_request_() {
   ESP_LOGV(TAG, "Sent: %s", format_hex_pretty(frame, 8).c_str());
   this->last_send_ = millis();
   this->waiting_for_response_ = true;
+  this->in_flight_address_ = request.address;
+  this->in_flight_function_ = request.function;
+  this->in_flight_register_ = request.start_register;
+  this->in_flight_count_ = request.num_registers;
+}
+
+void SrneModbus::notify_timeout_() {
+  for (auto *device : this->devices_) {
+    if (device->get_address() == this->in_flight_address_) {
+      device->on_modbus_timeout();
+    }
+  }
 }
 
 bool SrneModbus::parse_modbus_byte_(uint8_t byte) {

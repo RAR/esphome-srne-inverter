@@ -92,6 +92,14 @@ void SrneInverter::update() {
   this->update_counter_++;
 }
 
+void SrneInverter::on_modbus_timeout() {
+  if (!this->expected_steps_.empty()) {
+    uint8_t step = this->expected_steps_.front();
+    this->expected_steps_.pop();
+    ESP_LOGD(TAG, "Dropping queued step %u after timeout", step);
+  }
+}
+
 void SrneInverter::on_modbus_data(const std::vector<uint8_t> &data) {
   if (data.size() < 5) return;
 
