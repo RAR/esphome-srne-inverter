@@ -1,5 +1,6 @@
 #include "srne_inverter.h"
 #include "esphome/core/log.h"
+#include "esphome/core/helpers.h"
 
 namespace esphome {
 namespace srne_inverter {
@@ -133,7 +134,9 @@ void SrneInverter::decode_block_a_(const uint8_t *p, size_t /*byte_count*/) {
   this->publish_state_(this->pv1_current_sensor_, get_u16(p, 16) * 0.1f);
   uint16_t pv1_w = get_u16(p, 18);
   this->publish_state_(this->pv1_power_sensor_, (float) pv1_w);
-  // 0x010A DC load on/off (skip), 0x010B charge_state (handled in text_sensor task)
+  // 0x010A DC load on/off (skip), 0x010B charge_state
+  uint16_t charge_state = get_u16(p, 22);
+  this->publish_state_(this->charge_state_text_sensor_, this->decode_charge_state_(charge_state));
   // 0x010C-0x010D fault msg (skip), 0x010E charge_power
   this->publish_state_(this->charge_power_sensor_, (float) get_u16(p, 28));
   // 0x010F PV2 V, 0x0110 PV2 I, 0x0111 PV2 W
@@ -149,6 +152,8 @@ void SrneInverter::decode_block_b_(const uint8_t *p, size_t byte_count) {
 
   uint16_t machine_state = get_u16(p, 0);
   uint16_t grid_voltage_raw = get_u16(p, 6);
+
+  this->publish_state_(this->machine_state_text_sensor_, this->decode_machine_state_(machine_state));
 
   // grid_present: heuristic, true when grid V > 50.0 V
   this->publish_state_(this->grid_present_binary_sensor_, grid_voltage_raw > 500);
@@ -185,15 +190,25 @@ void SrneInverter::decode_block_b_(const uint8_t *p, size_t byte_count) {
 
 void SrneInverter::decode_block_c_(const uint8_t *p, size_t byte_count) {
   if (byte_count < BLOCK_C_BYTE_COUNT) return;
+
   // Fault is true if any of 0x0200..0x0203 != 0 (4 regs = 8 bytes)
   bool fault = false;
   for (size_t i = 0; i < 8; i++) {
-    if (p[i] != 0) {
-      fault = true;
-      break;
-    }
+    if (p[i] != 0) { fault = true; break; }
   }
   this->publish_state_(this->fault_binary_sensor_, fault);
+
+  // 0x0204..0x0207: 4 fault codes, each 1 register
+  std::string codes;
+  for (size_t i = 0; i < 4; i++) {
+    uint16_t code = get_u16(p, 8 + i * 2);
+    if (code != 0) {
+      if (!codes.empty()) codes += ";";
+      codes += str_sprintf("%u", code);
+    }
+  }
+  if (codes.empty()) codes = "None";
+  this->publish_state_(this->fault_codes_text_sensor_, codes);
 }
 
 void SrneInverter::publish_state_(sensor::Sensor *s, float value) {
@@ -205,6 +220,43 @@ void SrneInverter::publish_state_(sensor::Sensor *s, float value) {
 void SrneInverter::publish_state_(binary_sensor::BinarySensor *s, bool state) {
   if (s != nullptr) {
     s->publish_state(state);
+  }
+}
+
+void SrneInverter::publish_state_(text_sensor::TextSensor *s, const std::string &state) {
+  if (s != nullptr) {
+    s->publish_state(state);
+  }
+}
+
+std::string SrneInverter::decode_machine_state_(uint16_t state) {
+  switch (state) {
+    case 0: return "Power-up delay";
+    case 1: return "Waiting";
+    case 2: return "Initialization";
+    case 3: return "Soft start";
+    case 4: return "Mains powered";
+    case 5: return "Inverter powered";
+    case 6: return "Inverter to Mains";
+    case 7: return "Mains to Inverter";
+    case 8: return "Battery activate";
+    case 9: return "Shutdown by user";
+    case 10: return "Fault";
+    default: return str_sprintf("Unknown (%u)", state);
+  }
+}
+
+std::string SrneInverter::decode_charge_state_(uint16_t state) {
+  switch (state) {
+    case 0: return "Off";
+    case 1: return "Quick charge";
+    case 2: return "Constant voltage";
+    case 3: return "Boost";
+    case 4: return "Float";
+    case 5: return "Reserved";
+    case 6: return "Li activate";
+    case 7: return "Reserved";
+    default: return str_sprintf("Unknown (%u)", state);
   }
 }
 

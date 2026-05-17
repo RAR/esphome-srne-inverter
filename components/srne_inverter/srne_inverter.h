@@ -3,6 +3,7 @@
 #include "esphome/core/component.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/srne_modbus/srne_modbus.h"
 #include <queue>
 
@@ -56,6 +57,14 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void set_inverter_on_binary_sensor(binary_sensor::BinarySensor *s) { inverter_on_binary_sensor_ = s; }
   void set_fault_binary_sensor(binary_sensor::BinarySensor *s) { fault_binary_sensor_ = s; }
 
+  // Text sensors
+  void set_machine_state_text_sensor(text_sensor::TextSensor *s) { machine_state_text_sensor_ = s; }
+  void set_charge_state_text_sensor(text_sensor::TextSensor *s) { charge_state_text_sensor_ = s; }
+  void set_fault_codes_text_sensor(text_sensor::TextSensor *s) { fault_codes_text_sensor_ = s; }
+  void set_software_version_text_sensor(text_sensor::TextSensor *s) { software_version_text_sensor_ = s; }
+  void set_hardware_version_text_sensor(text_sensor::TextSensor *s) { hardware_version_text_sensor_ = s; }
+  void set_serial_number_text_sensor(text_sensor::TextSensor *s) { serial_number_text_sensor_ = s; }
+
  protected:
   // Block A storage
   sensor::Sensor *battery_soc_sensor_{nullptr};
@@ -94,14 +103,25 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   binary_sensor::BinarySensor *inverter_on_binary_sensor_{nullptr};
   binary_sensor::BinarySensor *fault_binary_sensor_{nullptr};
 
+  // Text sensors
+  text_sensor::TextSensor *machine_state_text_sensor_{nullptr};
+  text_sensor::TextSensor *charge_state_text_sensor_{nullptr};
+  text_sensor::TextSensor *fault_codes_text_sensor_{nullptr};
+  text_sensor::TextSensor *software_version_text_sensor_{nullptr};
+  text_sensor::TextSensor *hardware_version_text_sensor_{nullptr};
+  text_sensor::TextSensor *serial_number_text_sensor_{nullptr};
+
   uint8_t no_response_count_{0};
   std::queue<uint8_t> expected_steps_;
 
   void publish_state_(sensor::Sensor *s, float value);
   void publish_state_(binary_sensor::BinarySensor *s, bool state);
+  void publish_state_(text_sensor::TextSensor *s, const std::string &state);
   void decode_block_a_(const uint8_t *payload, size_t byte_count);
   void decode_block_b_(const uint8_t *payload, size_t byte_count);
   void decode_block_c_(const uint8_t *payload, size_t byte_count);
+  std::string decode_machine_state_(uint16_t state);
+  std::string decode_charge_state_(uint16_t state);
 };
 
 }  // namespace srne_inverter
