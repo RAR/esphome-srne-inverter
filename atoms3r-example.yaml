@@ -111,6 +111,7 @@ binary_sensor:
       id: inv_fault
     split_phase_mode:
       name: "Split Phase Mode"
+      entity_category: diagnostic
 
 sensor:
   - platform: wifi_signal
@@ -167,13 +168,13 @@ sensor:
       id: inv_load_percent
     battery_charge_current: { name: "Battery Charge Current" }
 
-    heatsink_a_temperature: { name: "Heatsink A Temp" }
-    heatsink_b_temperature: { name: "Heatsink B Temp" }
-    heatsink_c_temperature: { name: "Heatsink C Temp" }
+    heatsink_a_temperature: { name: "Heatsink A Temp", entity_category: diagnostic }
+    heatsink_b_temperature: { name: "Heatsink B Temp", entity_category: diagnostic }
+    heatsink_c_temperature: { name: "Heatsink C Temp", entity_category: diagnostic }
 
     # DC bus rails (undocumented; found via register scan, sum ≈ bus_voltage)
-    dc_bus_positive_voltage: { name: "DC Bus +" }
-    dc_bus_negative_voltage: { name: "DC Bus -" }
+    dc_bus_positive_voltage: { name: "DC Bus +", entity_category: diagnostic }
+    dc_bus_negative_voltage: { name: "DC Bus -", entity_category: diagnostic }
 
     # L2 (split-phase / parallel-120 second-leg). Populates when the inverter
     # is actively outputting on both legs (i.e. not in eco standby).
@@ -207,17 +208,22 @@ text_sensor:
     machine_state:
       name: "Machine State"
       id: inv_machine_state
+      entity_category: diagnostic
     charge_state:
       name: "Charge State"
       id: inv_charge_state
     fault_codes:
       name: "Fault Codes"
+      entity_category: diagnostic
     software_version:
       name: "Inverter Firmware"
+      entity_category: diagnostic
     hardware_version:
       name: "Inverter Hardware"
+      entity_category: diagnostic
     serial_number:
       name: "Inverter Serial"
+      entity_category: diagnostic
 
 switch:
   - platform: restart
