@@ -1,10 +1,18 @@
 #include "srne_modbus.h"
 #include "esphome/core/log.h"
+#include "esphome/core/helpers.h"
 
 namespace esphome {
 namespace srne_modbus {
 
 static const char *const TAG = "srne_modbus";
+
+static const uint8_t MODBUS_READ_HOLDING_REGISTERS = 0x03;
+static const uint8_t MODBUS_WRITE_SINGLE_REGISTER = 0x06;
+static const uint8_t MODBUS_WRITE_MULTIPLE_REGISTERS = 0x10;
+
+static const uint16_t SRNE_MODBUS_RESPONSE_TIMEOUT = 1000;
+static const uint16_t SRNE_MODBUS_MIN_MSG_LEN = 5;
 
 void SrneModbus::setup() {
   if (this->flow_control_pin_ != nullptr) {
@@ -12,7 +20,36 @@ void SrneModbus::setup() {
   }
 }
 
-void SrneModbus::loop() {}
+void SrneModbus::loop() {
+  const uint32_t now = millis();
+
+  while (this->available()) {
+    uint8_t byte;
+    this->read_byte(&byte);
+    if (this->parse_modbus_byte_(byte)) {
+      this->last_modbus_byte_ = now;
+    } else {
+      this->rx_buffer_.clear();
+    }
+  }
+
+  if (this->waiting_for_response_ && !this->rx_buffer_.empty() &&
+      (now - this->last_modbus_byte_ > SRNE_MODBUS_RESPONSE_TIMEOUT)) {
+    ESP_LOGW(TAG, "Modbus response timeout (partial frame)");
+    this->rx_buffer_.clear();
+    this->waiting_for_response_ = false;
+  }
+
+  if (this->waiting_for_response_ && this->rx_buffer_.empty() &&
+      (now - this->last_send_ > SRNE_MODBUS_RESPONSE_TIMEOUT)) {
+    ESP_LOGW(TAG, "No Modbus response received");
+    this->waiting_for_response_ = false;
+  }
+
+  if (!this->waiting_for_response_) {
+    this->send_next_request_();
+  }
+}
 
 void SrneModbus::dump_config() {
   ESP_LOGCONFIG(TAG, "SRNE Modbus:");
@@ -41,9 +78,93 @@ void SrneModbus::send(uint8_t address, uint8_t function, uint16_t start_register
   this->request_queue_.push(request);
 }
 
-void SrneModbus::send_next_request_() {}
+void SrneModbus::send_next_request_() {
+  if (this->request_queue_.empty() || this->waiting_for_response_) {
+    return;
+  }
 
-bool SrneModbus::parse_modbus_byte_(uint8_t /*byte*/) { return true; }
+  ModbusRequest request = this->request_queue_.front();
+  this->request_queue_.pop();
+
+  uint8_t frame[8];
+  frame[0] = request.address;
+  frame[1] = request.function;
+  frame[2] = request.start_register >> 8;
+  frame[3] = request.start_register & 0xFF;
+  frame[4] = request.num_registers >> 8;
+  frame[5] = request.num_registers & 0xFF;
+
+  uint16_t crc = crc16_modbus(frame, 6);
+  frame[6] = crc & 0xFF;
+  frame[7] = crc >> 8;
+
+  if (this->flow_control_pin_ != nullptr) {
+    this->flow_control_pin_->digital_write(true);
+  }
+
+  this->write_array(frame, 8);
+  this->flush();
+
+  if (this->flow_control_pin_ != nullptr) {
+    this->flow_control_pin_->digital_write(false);
+  }
+
+  ESP_LOGV(TAG, "Sent: %s", format_hex_pretty(frame, 8).c_str());
+  this->last_send_ = millis();
+  this->waiting_for_response_ = true;
+}
+
+bool SrneModbus::parse_modbus_byte_(uint8_t byte) {
+  if (this->rx_buffer_.empty()) {
+    this->rx_buffer_.push_back(byte);
+    return true;
+  }
+
+  this->rx_buffer_.push_back(byte);
+  const uint8_t *raw = this->rx_buffer_.data();
+  const size_t len = this->rx_buffer_.size();
+
+  if (len < SRNE_MODBUS_MIN_MSG_LEN) {
+    return true;
+  }
+
+  uint8_t function = raw[1];
+  size_t expected_len = 0;
+
+  if (function == MODBUS_READ_HOLDING_REGISTERS) {
+    uint8_t byte_count = raw[2];
+    expected_len = 3 + byte_count + 2;  // addr + func + count + data + crc
+  } else if (function == MODBUS_WRITE_SINGLE_REGISTER ||
+             function == MODBUS_WRITE_MULTIPLE_REGISTERS) {
+    expected_len = 8;  // addr + func + reg_hi + reg_lo + val_hi + val_lo + crc x2
+  } else if ((function & 0x80) != 0) {
+    expected_len = 5;  // addr + (func|0x80) + error + crc x2
+  }
+
+  if (expected_len == 0 || len < expected_len) {
+    return true;
+  }
+
+  uint16_t crc_calc = crc16_modbus(raw, expected_len - 2);
+  uint16_t crc_recv = raw[expected_len - 2] | (raw[expected_len - 1] << 8);
+
+  if (crc_calc != crc_recv) {
+    ESP_LOGW(TAG, "Modbus CRC check failed! Calculated: 0x%04X, Received: 0x%04X", crc_calc, crc_recv);
+    this->rx_buffer_.clear();
+    this->waiting_for_response_ = false;
+    return false;
+  }
+
+  ESP_LOGV(TAG, "Received: %s", format_hex_pretty(raw, expected_len).c_str());
+
+  for (auto *device : this->devices_) {
+    device->on_modbus_data(this->rx_buffer_);
+  }
+
+  this->rx_buffer_.clear();
+  this->waiting_for_response_ = false;
+  return true;
+}
 
 }  // namespace srne_modbus
 }  // namespace esphome
