@@ -50,6 +50,8 @@ CONF_PV_CHARGE_CURRENT = "pv_charge_current"
 CONF_HEATSINK_A_TEMPERATURE = "heatsink_a_temperature"
 CONF_HEATSINK_B_TEMPERATURE = "heatsink_b_temperature"
 CONF_HEATSINK_C_TEMPERATURE = "heatsink_c_temperature"
+CONF_DC_BUS_POSITIVE_VOLTAGE = "dc_bus_positive_voltage"
+CONF_DC_BUS_NEGATIVE_VOLTAGE = "dc_bus_negative_voltage"
 
 UNIT_VOLT_AMPS = "VA"
 
@@ -123,6 +125,8 @@ CONFIG_SCHEMA = SRNE_INVERTER_COMPONENT_SCHEMA.extend(
         cv.Optional(CONF_HEATSINK_A_TEMPERATURE): TEMPERATURE_SCHEMA,
         cv.Optional(CONF_HEATSINK_B_TEMPERATURE): TEMPERATURE_SCHEMA,
         cv.Optional(CONF_HEATSINK_C_TEMPERATURE): TEMPERATURE_SCHEMA,
+        cv.Optional(CONF_DC_BUS_POSITIVE_VOLTAGE): VOLTAGE_SCHEMA,
+        cv.Optional(CONF_DC_BUS_NEGATIVE_VOLTAGE): VOLTAGE_SCHEMA,
     }
 )
 
@@ -158,6 +162,8 @@ async def to_code(config):
         CONF_HEATSINK_A_TEMPERATURE: hub.set_heatsink_a_temperature_sensor,
         CONF_HEATSINK_B_TEMPERATURE: hub.set_heatsink_b_temperature_sensor,
         CONF_HEATSINK_C_TEMPERATURE: hub.set_heatsink_c_temperature_sensor,
+        CONF_DC_BUS_POSITIVE_VOLTAGE: hub.set_dc_bus_positive_voltage_sensor,
+        CONF_DC_BUS_NEGATIVE_VOLTAGE: hub.set_dc_bus_negative_voltage_sensor,
     }
     for key, setter in mapping.items():
         if key in config:

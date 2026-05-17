@@ -19,9 +19,15 @@ Subset of the V1.7 register map (`srne-hybrid-solar-inverter-modbus-protocol-v1-
 | 0x0111 | PV2 power | u16 | 1 | W | `pv2_power` |
 | — | (derived) | — | — | W | `pv_total_power` = pv1_power + pv2_power |
 
-## Block B — inverter (polled every cycle, split into two reads)
+## Block B — inverter (polled every cycle, split into three reads)
 
-At least one production SRNE firmware variant does not expose `0x0210` (machine state) or `0x0211` (password protection status mark) — reads at or spanning those addresses silently time out (no response, not a Modbus error). We start block B at `0x0212` and derive `inverter_on` from `inverter_voltage` instead of from `machine_state`. The `machine_state` text sensor stays Unknown on firmware that doesn't expose `0x0210`.
+The password-protection status register at `0x0211` silently times out on this SRNE firmware variant when read inside a multi-register span (no response, not a Modbus error). `0x0210` (machine state) reads fine as a 1-reg read with a 50ms inter-request quiet period in front of it, so we poll it on its own.
+
+### Block B0 — machine state (`0x0210`, 1 reg)
+
+| Reg | Name | Type | Mult | Unit | Sensor |
+|---|---|---|---|---|---|
+| 0x0210 | Machine state | u16 | — | enum | `machine_state` (text), `inverter_on` (binary) |
 
 ### Block B1 — bus/grid/inverter/load (`0x0212`–`0x021F`, 14 regs)
 
@@ -40,7 +46,7 @@ At least one production SRNE firmware variant does not expose `0x0210` (machine 
 | 0x021E | Battery charge current (mains) | u16 | 0.1 | A | `battery_charge_current` |
 | 0x021F | Load percent | u16 | 1 | % | `load_percent` |
 
-### Block B2 — heatsinks + PV charge (`0x0220`–`0x0224`, 5 regs)
+### Block B2 — heatsinks + PV charge + DC bus rails (`0x0220`–`0x0229`, 10 regs)
 
 | Reg | Name | Type | Mult | Unit | Sensor |
 |---|---|---|---|---|---|
@@ -48,6 +54,8 @@ At least one production SRNE firmware variant does not expose `0x0210` (machine 
 | 0x0221 | Heat sink B (DC-AC) | i16 | 0.1 | °C | `heatsink_b_temperature` |
 | 0x0222 | Heat sink C (transformer) | i16 | 0.1 | °C | `heatsink_c_temperature` |
 | 0x0224 | PV charge current | u16 | 0.1 | A | `pv_charge_current` |
+| 0x0228 | +DC bus rail voltage | u16 | 0.1 | V | `dc_bus_positive_voltage` (undocumented — discovered via register scan) |
+| 0x0229 | -DC bus rail voltage | u16 | 0.1 | V | `dc_bus_negative_voltage` (undocumented — sum ≈ `bus_voltage` at 0x0212) |
 
 ## Block C — faults (`0x0200`–`0x0207`, 8 regs, polled only if a fault sensor is configured)
 

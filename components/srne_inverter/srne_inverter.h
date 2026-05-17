@@ -55,6 +55,8 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void set_heatsink_a_temperature_sensor(sensor::Sensor *s) { heatsink_a_temperature_sensor_ = s; }
   void set_heatsink_b_temperature_sensor(sensor::Sensor *s) { heatsink_b_temperature_sensor_ = s; }
   void set_heatsink_c_temperature_sensor(sensor::Sensor *s) { heatsink_c_temperature_sensor_ = s; }
+  void set_dc_bus_positive_voltage_sensor(sensor::Sensor *s) { dc_bus_positive_voltage_sensor_ = s; }
+  void set_dc_bus_negative_voltage_sensor(sensor::Sensor *s) { dc_bus_negative_voltage_sensor_ = s; }
 
   // Binary sensors
   void set_online_status_binary_sensor(binary_sensor::BinarySensor *s) { online_status_binary_sensor_ = s; }
@@ -100,6 +102,8 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   sensor::Sensor *charge_power_sensor_{nullptr};
 
   // Block B storage
+  sensor::Sensor *dc_bus_positive_voltage_sensor_{nullptr};
+  sensor::Sensor *dc_bus_negative_voltage_sensor_{nullptr};
   sensor::Sensor *bus_voltage_sensor_{nullptr};
   sensor::Sensor *grid_voltage_sensor_{nullptr};
   sensor::Sensor *grid_current_sensor_{nullptr};
@@ -159,6 +163,7 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void publish_state_(binary_sensor::BinarySensor *s, bool state);
   void publish_state_(text_sensor::TextSensor *s, const std::string &state);
   void decode_block_a_(const uint8_t *payload, size_t byte_count);
+  void decode_block_b0_(const uint8_t *payload, size_t byte_count);
   void decode_block_b1_(const uint8_t *payload, size_t byte_count);
   void decode_block_b2_(const uint8_t *payload, size_t byte_count);
   void decode_block_c_(const uint8_t *payload, size_t byte_count);
