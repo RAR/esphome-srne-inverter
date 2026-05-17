@@ -9,8 +9,8 @@
 # isn't in the public PDF.
 
 esphome:
-  name: srne-scan
-  friendly_name: SRNE Scan
+  name: srne-inverter
+  friendly_name: SRNE Inverter Monitor
   platformio_options:
     board_build.flash_mode: dio
 
