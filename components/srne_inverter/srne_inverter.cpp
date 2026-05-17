@@ -24,7 +24,18 @@ static const uint16_t REG_BLOCK_C_START = 0x0200;
 static const uint16_t REG_BLOCK_C_COUNT = 0x08;
 static const uint8_t BLOCK_C_BYTE_COUNT = 0x10;
 
+// Block D: software/hardware versions — 0x0014..0x0017 (4 regs, 8 bytes)
+static const uint16_t REG_BLOCK_D_START = 0x0014;
+static const uint16_t REG_BLOCK_D_COUNT = 0x04;
+static const uint8_t BLOCK_D_BYTE_COUNT = 0x08;
+
+// Block E: product SN string — 0x0035..0x0048 (20 regs, 40 bytes)
+static const uint16_t REG_BLOCK_E_START = 0x0035;
+static const uint16_t REG_BLOCK_E_COUNT = 0x14;
+static const uint8_t BLOCK_E_BYTE_COUNT = 0x28;
+
 static const uint8_t MAX_NO_RESPONSE_COUNT = 5;
+static const uint32_t PRODUCT_INFO_INTERVAL = 30;  // every N update cycles
 
 void SrneInverter::dump_config() {
   ESP_LOGCONFIG(TAG, "SRNE Inverter:");
@@ -48,6 +59,11 @@ void SrneInverter::dump_config() {
   LOG_BINARY_SENSOR("  ", "Grid Present", this->grid_present_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "Inverter On", this->inverter_on_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "Fault", this->fault_binary_sensor_);
+  LOG_TEXT_SENSOR("  ", "Machine State", this->machine_state_text_sensor_);
+  LOG_TEXT_SENSOR("  ", "Charge State", this->charge_state_text_sensor_);
+  LOG_TEXT_SENSOR("  ", "Software", this->software_version_text_sensor_);
+  LOG_TEXT_SENSOR("  ", "Hardware", this->hardware_version_text_sensor_);
+  LOG_TEXT_SENSOR("  ", "Serial", this->serial_number_text_sensor_);
 }
 
 float SrneInverter::get_setup_priority() const { return setup_priority::DATA; }
@@ -66,6 +82,14 @@ void SrneInverter::update() {
   this->send(FUNCTION_READ_HOLDING, REG_BLOCK_B_START, REG_BLOCK_B_COUNT);
   this->expected_steps_.push(2);
   this->send(FUNCTION_READ_HOLDING, REG_BLOCK_C_START, REG_BLOCK_C_COUNT);
+
+  if ((this->update_counter_ % PRODUCT_INFO_INTERVAL) == 0) {
+    this->expected_steps_.push(3);
+    this->send(FUNCTION_READ_HOLDING, REG_BLOCK_D_START, REG_BLOCK_D_COUNT);
+    this->expected_steps_.push(4);
+    this->send(FUNCTION_READ_HOLDING, REG_BLOCK_E_START, REG_BLOCK_E_COUNT);
+  }
+  this->update_counter_++;
 }
 
 void SrneInverter::on_modbus_data(const std::vector<uint8_t> &data) {
@@ -111,6 +135,12 @@ void SrneInverter::on_modbus_data(const std::vector<uint8_t> &data) {
       break;
     case 2:
       if (byte_count == BLOCK_C_BYTE_COUNT) this->decode_block_c_(payload, byte_count);
+      break;
+    case 3:
+      if (byte_count == BLOCK_D_BYTE_COUNT) this->decode_block_d_(payload, byte_count);
+      break;
+    case 4:
+      if (byte_count == BLOCK_E_BYTE_COUNT) this->decode_block_e_(payload, byte_count);
       break;
   }
 }
@@ -244,6 +274,46 @@ std::string SrneInverter::decode_machine_state_(uint16_t state) {
     case 10: return "Fault";
     default: return str_sprintf("Unknown (%u)", state);
   }
+}
+
+void SrneInverter::decode_block_d_(const uint8_t *p, size_t byte_count) {
+  if (byte_count < BLOCK_D_BYTE_COUNT) return;
+  // 0x0014..0x0015 software (CPU1/CPU2), 0x0016..0x0017 hardware (control/power)
+  // Per PDF: e.g. value 100 → "v1.00"
+  auto fmt_ver = [](uint16_t v) {
+    return str_sprintf("v%u.%02u", v / 100, v % 100);
+  };
+  uint16_t cpu1 = get_u16(p, 0);
+  uint16_t cpu2 = get_u16(p, 2);
+  uint16_t ctrl = get_u16(p, 4);
+  uint16_t pwr = get_u16(p, 6);
+  this->publish_state_(this->software_version_text_sensor_,
+                       "CPU1 " + fmt_ver(cpu1) + " / CPU2 " + fmt_ver(cpu2));
+  this->publish_state_(this->hardware_version_text_sensor_,
+                       "Control " + fmt_ver(ctrl) + " / Power " + fmt_ver(pwr));
+}
+
+void SrneInverter::decode_block_e_(const uint8_t *p, size_t byte_count) {
+  if (byte_count < BLOCK_E_BYTE_COUNT) return;
+  this->publish_state_(this->serial_number_text_sensor_,
+                       this->extract_low_byte_string_(p, byte_count));
+}
+
+std::string SrneInverter::extract_low_byte_string_(const uint8_t *data, size_t length) {
+  // PDF: "String format, low 8 bits per register valid, high 8 bits invalid".
+  // Each register is 2 bytes (big-endian on wire), so the valid byte is the second of each pair.
+  std::string result;
+  result.reserve(length / 2);
+  for (size_t i = 1; i < length; i += 2) {
+    uint8_t c = data[i];
+    if (c >= 0x20 && c <= 0x7E) {
+      result += static_cast<char>(c);
+    } else if (c == 0x00) {
+      break;
+    }
+  }
+  while (!result.empty() && result.back() == ' ') result.pop_back();
+  return result;
 }
 
 std::string SrneInverter::decode_charge_state_(uint16_t state) {

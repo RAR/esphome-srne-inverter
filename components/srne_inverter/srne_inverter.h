@@ -112,6 +112,7 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   text_sensor::TextSensor *serial_number_text_sensor_{nullptr};
 
   uint8_t no_response_count_{0};
+  uint32_t update_counter_{0};
   std::queue<uint8_t> expected_steps_;
 
   void publish_state_(sensor::Sensor *s, float value);
@@ -120,8 +121,11 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void decode_block_a_(const uint8_t *payload, size_t byte_count);
   void decode_block_b_(const uint8_t *payload, size_t byte_count);
   void decode_block_c_(const uint8_t *payload, size_t byte_count);
+  void decode_block_d_(const uint8_t *payload, size_t byte_count);
+  void decode_block_e_(const uint8_t *payload, size_t byte_count);
   std::string decode_machine_state_(uint16_t state);
   std::string decode_charge_state_(uint16_t state);
+  std::string extract_low_byte_string_(const uint8_t *data, size_t length);
 };
 
 }  // namespace srne_inverter
