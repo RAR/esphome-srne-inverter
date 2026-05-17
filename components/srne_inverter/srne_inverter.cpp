@@ -37,6 +37,14 @@ static const uint16_t REG_BLOCK_B2_START = 0x0220;
 static const uint16_t REG_BLOCK_B2_COUNT = 0x0A;
 static const uint8_t BLOCK_B2_BYTE_COUNT = 0x14;
 
+// Block B3: L2 (split-phase / parallel-120 second-leg) data — 0x022A..0x0236
+// PDF marks these "specific machine models", and on this inverter they only
+// populate when the unit is actively inverting on both legs. Phase C slots
+// (0x022B, 0x022D, 0x022F, 0x0231, 0x0233, 0x0235) are 3-phase and stay 0.
+static const uint16_t REG_BLOCK_B3_START = 0x022A;
+static const uint16_t REG_BLOCK_B3_COUNT = 0x0D;
+static const uint8_t BLOCK_B3_BYTE_COUNT = 0x1A;
+
 // Block C: faults — 0x0200..0x0207 (8 regs, 16 bytes)
 static const uint16_t REG_BLOCK_C_START = 0x0200;
 static const uint16_t REG_BLOCK_C_COUNT = 0x08;
@@ -170,6 +178,19 @@ void SrneInverter::update() {
   this->send(FUNCTION_READ_HOLDING, REG_BLOCK_B1_START, REG_BLOCK_B1_COUNT);
   this->expected_steps_.push(2);
   this->send(FUNCTION_READ_HOLDING, REG_BLOCK_B2_START, REG_BLOCK_B2_COUNT);
+
+  // Block B3 (L2 leg) is only polled if any L2 sensor is configured.
+  bool want_b3 = this->grid_voltage_l2_sensor_ != nullptr ||
+                 this->inverter_voltage_l2_sensor_ != nullptr ||
+                 this->inverter_current_l2_sensor_ != nullptr ||
+                 this->load_current_l2_sensor_ != nullptr ||
+                 this->load_active_power_l2_sensor_ != nullptr ||
+                 this->load_apparent_power_l2_sensor_ != nullptr ||
+                 this->load_percent_l2_sensor_ != nullptr;
+  if (want_b3) {
+    this->expected_steps_.push(11);
+    this->send(FUNCTION_READ_HOLDING, REG_BLOCK_B3_START, REG_BLOCK_B3_COUNT);
+  }
 
   // Block C (faults) is debug-only on some firmware variants and silently
   // times out. Only poll if the user actually configured the fault sensors.
@@ -337,6 +358,9 @@ void SrneInverter::on_modbus_data(const std::vector<uint8_t> &data) {
       break;
     case 10:
       if (byte_count == BLOCK_F4_BYTE_COUNT) this->decode_block_f4_(payload, byte_count);
+      break;
+    case 11:
+      if (byte_count == BLOCK_B3_BYTE_COUNT) this->decode_block_b3_(payload, byte_count);
       break;
   }
 
@@ -549,6 +573,23 @@ void SrneInverter::decode_block_f2_(const uint8_t *p, size_t byte_count) {
   if (this->max_charge_current_number_ != nullptr) {
     static_cast<SrneNumber *>(this->max_charge_current_number_)->publish_from_raw(max_charge);
   }
+}
+
+void SrneInverter::decode_block_b3_(const uint8_t *p, size_t byte_count) {
+  if (byte_count < BLOCK_B3_BYTE_COUNT) return;
+
+  // Offsets from 0x022A (block covers 0x022A..0x0236, 13 regs)
+  // 0x022A grid V L2, 0x022B grid V C (skip), 0x022C inv V L2, 0x022D inv V C (skip)
+  // 0x022E inv I L2, 0x022F inv I C (skip), 0x0230 load I L2, 0x0231 load I C (skip)
+  // 0x0232 load W L2, 0x0233 load W C (skip), 0x0234 load VA L2, 0x0235 load VA C (skip)
+  // 0x0236 load % L2
+  this->publish_state_(this->grid_voltage_l2_sensor_, get_u16(p, 0) * 0.1f);
+  this->publish_state_(this->inverter_voltage_l2_sensor_, get_u16(p, 4) * 0.1f);
+  this->publish_state_(this->inverter_current_l2_sensor_, get_u16(p, 8) * 0.1f);
+  this->publish_state_(this->load_current_l2_sensor_, get_u16(p, 12) * 0.1f);
+  this->publish_state_(this->load_active_power_l2_sensor_, (float) get_u16(p, 16));
+  this->publish_state_(this->load_apparent_power_l2_sensor_, (float) get_u16(p, 20));
+  this->publish_state_(this->load_percent_l2_sensor_, (float) get_u16(p, 24));
 }
 
 void SrneInverter::decode_block_f4_(const uint8_t *p, size_t byte_count) {

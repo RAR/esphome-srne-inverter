@@ -46,6 +46,20 @@ The password-protection status register at `0x0211` silently times out on this S
 | 0x021E | Battery charge current (mains) | u16 | 0.1 | A | `battery_charge_current` |
 | 0x021F | Load percent | u16 | 1 | % | `load_percent` |
 
+### Block B3 — L2 leg data (`0x022A`–`0x0236`, 13 regs, polled only if any L2 sensor is configured)
+
+Populates only when the inverter is actively outputting on both legs (i.e. not in eco standby). On this firmware variant the V1.7 PDF's "specific machine models" warning for `0x022A`–`0x0237` translates to "split-phase / parallel-120 second leg" data. Phase C slots (`0x022B`, `0x022D`, `0x022F`, `0x0231`, `0x0233`, `0x0235`) are 3-phase and stay 0; we just skip them on decode.
+
+| Reg | Name | Type | Mult | Unit | Sensor |
+|---|---|---|---|---|---|
+| 0x022A | Grid voltage L2 | u16 | 0.1 | V | `grid_voltage_l2` |
+| 0x022C | Inverter voltage L2 | u16 | 0.1 | V | `inverter_voltage_l2` |
+| 0x022E | Inverter current L2 | u16 | 0.1 | A | `inverter_current_l2` |
+| 0x0230 | Load current L2 | u16 | 0.1 | A | `load_current_l2` |
+| 0x0232 | Load active power L2 | u16 | 1 | W | `load_active_power_l2` |
+| 0x0234 | Load apparent power L2 | u16 | 1 | VA | `load_apparent_power_l2` |
+| 0x0236 | Load percent L2 | u16 | 1 | % | `load_percent_l2` |
+
 ### Block B2 — heatsinks + PV charge + DC bus rails (`0x0220`–`0x0229`, 10 regs)
 
 | Reg | Name | Type | Mult | Unit | Sensor |

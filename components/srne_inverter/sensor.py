@@ -53,6 +53,15 @@ CONF_HEATSINK_C_TEMPERATURE = "heatsink_c_temperature"
 CONF_DC_BUS_POSITIVE_VOLTAGE = "dc_bus_positive_voltage"
 CONF_DC_BUS_NEGATIVE_VOLTAGE = "dc_bus_negative_voltage"
 
+# L2 (split-phase / parallel-120 second-leg)
+CONF_GRID_VOLTAGE_L2 = "grid_voltage_l2"
+CONF_INVERTER_VOLTAGE_L2 = "inverter_voltage_l2"
+CONF_INVERTER_CURRENT_L2 = "inverter_current_l2"
+CONF_LOAD_CURRENT_L2 = "load_current_l2"
+CONF_LOAD_ACTIVE_POWER_L2 = "load_active_power_l2"
+CONF_LOAD_APPARENT_POWER_L2 = "load_apparent_power_l2"
+CONF_LOAD_PERCENT_L2 = "load_percent_l2"
+
 UNIT_VOLT_AMPS = "VA"
 
 VOLTAGE_SCHEMA = sensor.sensor_schema(
@@ -127,6 +136,13 @@ CONFIG_SCHEMA = SRNE_INVERTER_COMPONENT_SCHEMA.extend(
         cv.Optional(CONF_HEATSINK_C_TEMPERATURE): TEMPERATURE_SCHEMA,
         cv.Optional(CONF_DC_BUS_POSITIVE_VOLTAGE): VOLTAGE_SCHEMA,
         cv.Optional(CONF_DC_BUS_NEGATIVE_VOLTAGE): VOLTAGE_SCHEMA,
+        cv.Optional(CONF_GRID_VOLTAGE_L2): VOLTAGE_SCHEMA,
+        cv.Optional(CONF_INVERTER_VOLTAGE_L2): VOLTAGE_SCHEMA,
+        cv.Optional(CONF_INVERTER_CURRENT_L2): CURRENT_SCHEMA,
+        cv.Optional(CONF_LOAD_CURRENT_L2): CURRENT_SCHEMA,
+        cv.Optional(CONF_LOAD_ACTIVE_POWER_L2): POWER_SCHEMA,
+        cv.Optional(CONF_LOAD_APPARENT_POWER_L2): APPARENT_POWER_SCHEMA,
+        cv.Optional(CONF_LOAD_PERCENT_L2): PERCENT_SCHEMA,
     }
 )
 
@@ -164,6 +180,13 @@ async def to_code(config):
         CONF_HEATSINK_C_TEMPERATURE: hub.set_heatsink_c_temperature_sensor,
         CONF_DC_BUS_POSITIVE_VOLTAGE: hub.set_dc_bus_positive_voltage_sensor,
         CONF_DC_BUS_NEGATIVE_VOLTAGE: hub.set_dc_bus_negative_voltage_sensor,
+        CONF_GRID_VOLTAGE_L2: hub.set_grid_voltage_l2_sensor,
+        CONF_INVERTER_VOLTAGE_L2: hub.set_inverter_voltage_l2_sensor,
+        CONF_INVERTER_CURRENT_L2: hub.set_inverter_current_l2_sensor,
+        CONF_LOAD_CURRENT_L2: hub.set_load_current_l2_sensor,
+        CONF_LOAD_ACTIVE_POWER_L2: hub.set_load_active_power_l2_sensor,
+        CONF_LOAD_APPARENT_POWER_L2: hub.set_load_apparent_power_l2_sensor,
+        CONF_LOAD_PERCENT_L2: hub.set_load_percent_l2_sensor,
     }
     for key, setter in mapping.items():
         if key in config:

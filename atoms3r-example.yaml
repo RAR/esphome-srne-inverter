@@ -173,6 +173,16 @@ sensor:
     dc_bus_positive_voltage: { name: "+DC Bus" }
     dc_bus_negative_voltage: { name: "-DC Bus" }
 
+    # L2 (split-phase / parallel-120 second-leg). Populates when the inverter
+    # is actively outputting on both legs (i.e. not in eco standby).
+    inverter_voltage_l2: { name: "Inverter Voltage L2" }
+    inverter_current_l2: { name: "Inverter Current L2" }
+    load_current_l2: { name: "Load Current L2" }
+    load_active_power_l2: { name: "Load Power L2" }
+    load_apparent_power_l2: { name: "Load Apparent Power L2" }
+    load_percent_l2: { name: "Load Percent L2" }
+    # grid_voltage_l2: { name: "Grid Voltage L2" }    # uncomment if grid is wired
+
 text_sensor:
   - platform: wifi_info
     ip_address:

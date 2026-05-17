@@ -59,6 +59,15 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void set_dc_bus_positive_voltage_sensor(sensor::Sensor *s) { dc_bus_positive_voltage_sensor_ = s; }
   void set_dc_bus_negative_voltage_sensor(sensor::Sensor *s) { dc_bus_negative_voltage_sensor_ = s; }
 
+  // L2 (split-phase / parallel-120 second-leg) sensors — Block B3
+  void set_grid_voltage_l2_sensor(sensor::Sensor *s) { grid_voltage_l2_sensor_ = s; }
+  void set_inverter_voltage_l2_sensor(sensor::Sensor *s) { inverter_voltage_l2_sensor_ = s; }
+  void set_inverter_current_l2_sensor(sensor::Sensor *s) { inverter_current_l2_sensor_ = s; }
+  void set_load_current_l2_sensor(sensor::Sensor *s) { load_current_l2_sensor_ = s; }
+  void set_load_active_power_l2_sensor(sensor::Sensor *s) { load_active_power_l2_sensor_ = s; }
+  void set_load_apparent_power_l2_sensor(sensor::Sensor *s) { load_apparent_power_l2_sensor_ = s; }
+  void set_load_percent_l2_sensor(sensor::Sensor *s) { load_percent_l2_sensor_ = s; }
+
   // Binary sensors
   void set_online_status_binary_sensor(binary_sensor::BinarySensor *s) { online_status_binary_sensor_ = s; }
   void set_grid_present_binary_sensor(binary_sensor::BinarySensor *s) { grid_present_binary_sensor_ = s; }
@@ -125,6 +134,15 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   sensor::Sensor *heatsink_b_temperature_sensor_{nullptr};
   sensor::Sensor *heatsink_c_temperature_sensor_{nullptr};
 
+  // L2 storage
+  sensor::Sensor *grid_voltage_l2_sensor_{nullptr};
+  sensor::Sensor *inverter_voltage_l2_sensor_{nullptr};
+  sensor::Sensor *inverter_current_l2_sensor_{nullptr};
+  sensor::Sensor *load_current_l2_sensor_{nullptr};
+  sensor::Sensor *load_active_power_l2_sensor_{nullptr};
+  sensor::Sensor *load_apparent_power_l2_sensor_{nullptr};
+  sensor::Sensor *load_percent_l2_sensor_{nullptr};
+
   // Binary sensors
   binary_sensor::BinarySensor *online_status_binary_sensor_{nullptr};
   binary_sensor::BinarySensor *grid_present_binary_sensor_{nullptr};
@@ -173,6 +191,7 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void decode_block_b0_(const uint8_t *payload, size_t byte_count);
   void decode_block_b1_(const uint8_t *payload, size_t byte_count);
   void decode_block_b2_(const uint8_t *payload, size_t byte_count);
+  void decode_block_b3_(const uint8_t *payload, size_t byte_count);
   void decode_block_f4_(const uint8_t *payload, size_t byte_count);
   void decode_block_c_(const uint8_t *payload, size_t byte_count);
   void decode_block_d_(const uint8_t *payload, size_t byte_count);
