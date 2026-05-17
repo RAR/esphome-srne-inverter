@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esphome/core/component.h"
+#include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/srne_modbus/srne_modbus.h"
 #include <queue>
@@ -49,6 +50,12 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void set_heatsink_b_temperature_sensor(sensor::Sensor *s) { heatsink_b_temperature_sensor_ = s; }
   void set_heatsink_c_temperature_sensor(sensor::Sensor *s) { heatsink_c_temperature_sensor_ = s; }
 
+  // Binary sensors
+  void set_online_status_binary_sensor(binary_sensor::BinarySensor *s) { online_status_binary_sensor_ = s; }
+  void set_grid_present_binary_sensor(binary_sensor::BinarySensor *s) { grid_present_binary_sensor_ = s; }
+  void set_inverter_on_binary_sensor(binary_sensor::BinarySensor *s) { inverter_on_binary_sensor_ = s; }
+  void set_fault_binary_sensor(binary_sensor::BinarySensor *s) { fault_binary_sensor_ = s; }
+
  protected:
   // Block A storage
   sensor::Sensor *battery_soc_sensor_{nullptr};
@@ -81,11 +88,20 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   sensor::Sensor *heatsink_b_temperature_sensor_{nullptr};
   sensor::Sensor *heatsink_c_temperature_sensor_{nullptr};
 
+  // Binary sensors
+  binary_sensor::BinarySensor *online_status_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *grid_present_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *inverter_on_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *fault_binary_sensor_{nullptr};
+
+  uint8_t no_response_count_{0};
   std::queue<uint8_t> expected_steps_;
 
   void publish_state_(sensor::Sensor *s, float value);
+  void publish_state_(binary_sensor::BinarySensor *s, bool state);
   void decode_block_a_(const uint8_t *payload, size_t byte_count);
   void decode_block_b_(const uint8_t *payload, size_t byte_count);
+  void decode_block_c_(const uint8_t *payload, size_t byte_count);
 };
 
 }  // namespace srne_inverter
