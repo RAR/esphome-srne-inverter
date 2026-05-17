@@ -227,6 +227,10 @@ switch:
     srne_inverter_id: inv0
     eco_mode:
       name: "Eco Mode"
+    overload_auto_restart:
+      name: "Overload Auto Restart"
+    overheat_auto_restart:
+      name: "Overheat Auto Restart"
 
 # Writable settings — exposed via Modbus function 0x06. Optional; only the
 # entities you configure get polled (settings poll runs every ~5 minutes).
@@ -237,6 +241,8 @@ select:
       name: "Output Priority"
     charge_priority:
       name: "Charge Priority"
+    battery_type:
+      name: "Battery Type"
 
 number:
   - platform: srne_inverter

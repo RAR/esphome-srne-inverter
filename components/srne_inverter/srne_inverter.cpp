@@ -91,13 +91,27 @@ static const uint16_t REG_BLOCK_F5_START = 0xE21E;
 static const uint16_t REG_BLOCK_F5_COUNT = 0x01;
 static const uint8_t BLOCK_F5_BYTE_COUNT = 0x02;
 
+// Block F6: 0xE20D..0xE20E (2 regs) — overload_auto_restart + overheat_auto_restart
+static const uint16_t REG_BLOCK_F6_START = 0xE20D;
+static const uint16_t REG_BLOCK_F6_COUNT = 0x02;
+static const uint8_t BLOCK_F6_BYTE_COUNT = 0x04;
+
+// Block G: 0xE004 (1 reg) — Battery type (separate from P05 since we don't need
+// the rest of that block for V1).
+static const uint16_t REG_BLOCK_G_START = 0xE004;
+static const uint16_t REG_BLOCK_G_COUNT = 0x01;
+static const uint8_t BLOCK_G_BYTE_COUNT = 0x02;
+
 // Settings registers we may write to (function 0x06)
 static const uint16_t REG_OUTPUT_PRIORITY = 0xE204;
 static const uint16_t REG_MAINS_CHARGE_CURRENT_LIMIT = 0xE205;
 static const uint16_t REG_OUTPUT_VOLTAGE = 0xE208;
 static const uint16_t REG_MAX_CHARGE_CURRENT = 0xE20A;
 static const uint16_t REG_ECO_MODE = 0xE20C;
+static const uint16_t REG_OVERLOAD_AUTO_RESTART = 0xE20D;
+static const uint16_t REG_OVERHEAT_AUTO_RESTART = 0xE20E;
 static const uint16_t REG_CHARGE_PRIORITY = 0xE20F;
+static const uint16_t REG_BATTERY_TYPE = 0xE004;
 
 // Sentinel step id for register-scan replies (anything not in 0..8 normal steps).
 static const uint8_t SCAN_STEP = 0xFF;
@@ -319,6 +333,19 @@ void SrneInverter::update() {
       this->expected_steps_.push(12);
       this->send(FUNCTION_READ_HOLDING, REG_BLOCK_F5_START, REG_BLOCK_F5_COUNT);
     }
+    // Block F6 (auto-restart switches)
+    bool want_f6 = this->overload_auto_restart_switch_ != nullptr ||
+                   this->overheat_auto_restart_switch_ != nullptr;
+    if (want_f6) {
+      this->expected_steps_.push(13);
+      this->send(FUNCTION_READ_HOLDING, REG_BLOCK_F6_START, REG_BLOCK_F6_COUNT);
+    }
+    // Block G (battery type) — lives in the P05 settings range, not P07
+    bool want_g = this->battery_type_select_ != nullptr;
+    if (want_g) {
+      this->expected_steps_.push(14);
+      this->send(FUNCTION_READ_HOLDING, REG_BLOCK_G_START, REG_BLOCK_G_COUNT);
+    }
   }
   this->update_counter_++;
 }
@@ -446,6 +473,12 @@ void SrneInverter::on_modbus_data(const std::vector<uint8_t> &data) {
       break;
     case 12:
       if (byte_count == BLOCK_F5_BYTE_COUNT) this->decode_block_f5_(payload, byte_count);
+      break;
+    case 13:
+      if (byte_count == BLOCK_F6_BYTE_COUNT) this->decode_block_f6_(payload, byte_count);
+      break;
+    case 14:
+      if (byte_count == BLOCK_G_BYTE_COUNT) this->decode_block_g_(payload, byte_count);
       break;
   }
 
@@ -726,6 +759,25 @@ void SrneInverter::decode_block_f4_(const uint8_t *p, size_t byte_count) {
   // 0xE20C eco_mode (1 reg, 0=off / 1=on)
   if (this->eco_mode_switch_ != nullptr) {
     static_cast<SrneSwitch *>(this->eco_mode_switch_)->publish_from_raw(get_u16(p, 0));
+  }
+}
+
+void SrneInverter::decode_block_f6_(const uint8_t *p, size_t byte_count) {
+  if (byte_count < BLOCK_F6_BYTE_COUNT) return;
+  // 0xE20D overload_auto_restart, 0xE20E overheat_auto_restart
+  if (this->overload_auto_restart_switch_ != nullptr) {
+    static_cast<SrneSwitch *>(this->overload_auto_restart_switch_)->publish_from_raw(get_u16(p, 0));
+  }
+  if (this->overheat_auto_restart_switch_ != nullptr) {
+    static_cast<SrneSwitch *>(this->overheat_auto_restart_switch_)->publish_from_raw(get_u16(p, 2));
+  }
+}
+
+void SrneInverter::decode_block_g_(const uint8_t *p, size_t byte_count) {
+  if (byte_count < BLOCK_G_BYTE_COUNT) return;
+  // 0xE004 battery_type (enum)
+  if (this->battery_type_select_ != nullptr) {
+    static_cast<SrneSelect *>(this->battery_type_select_)->publish_from_raw(get_u16(p, 0));
   }
 }
 

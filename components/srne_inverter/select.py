@@ -11,6 +11,7 @@ SrneSelect = srne_inverter_ns.class_("SrneSelect", select.Select, cg.Component)
 
 CONF_OUTPUT_PRIORITY = "output_priority"
 CONF_CHARGE_PRIORITY = "charge_priority"
+CONF_BATTERY_TYPE = "battery_type"
 
 # Order MUST match the inverter's enum values — index in this list is the raw
 # value written to the register.
@@ -18,10 +19,32 @@ CONF_CHARGE_PRIORITY = "charge_priority"
 OUTPUT_PRIORITY_OPTIONS = ["Solar", "Line", "SBU"]
 #   0xE20F Charge priority: 0 PV preferred, 1 Mains preferred, 2 Hybrid, 3 PV only
 CHARGE_PRIORITY_OPTIONS = ["PV preferred", "Mains preferred", "Hybrid", "PV only"]
+#   0xE004 Battery type, per §5.2 menu item 08 of the user manual.
+#   Indices: 0=User-defined, 1=Sealed lead-acid, 2=Flooded lead-acid, 3=Gel,
+#   6,7,8=L14/L15/L16 LFP variants (commonly used here), 4,5,9-12 reserved,
+#   13,14=N13/N14 ternary Li-ion. Index defines the wire value.
+BATTERY_TYPE_OPTIONS = [
+    "User-defined",       # 0
+    "Sealed lead-acid",   # 1
+    "Flooded lead-acid",  # 2
+    "Gel",                # 3
+    "Reserved (4)",       # 4
+    "Reserved (5)",       # 5
+    "LFP L14",            # 6
+    "LFP L15",            # 7
+    "LFP L16",            # 8
+    "Reserved (9)",       # 9
+    "Reserved (10)",      # 10
+    "Reserved (11)",      # 11
+    "Reserved (12)",      # 12
+    "Ternary N13",        # 13
+    "Ternary N14",        # 14
+]
 
 # Register addresses (kept in sync with srne_inverter.cpp REG_* constants)
 REG_OUTPUT_PRIORITY = 0xE204
 REG_CHARGE_PRIORITY = 0xE20F
+REG_BATTERY_TYPE = 0xE004
 
 CONFIG_SCHEMA = SRNE_INVERTER_COMPONENT_SCHEMA.extend(
     {
@@ -34,6 +57,11 @@ CONFIG_SCHEMA = SRNE_INVERTER_COMPONENT_SCHEMA.extend(
             SrneSelect,
             entity_category=ENTITY_CATEGORY_CONFIG,
             icon="mdi:solar-power",
+        ),
+        cv.Optional(CONF_BATTERY_TYPE): select.select_schema(
+            SrneSelect,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+            icon="mdi:car-battery",
         ),
     }
 )
@@ -61,3 +89,9 @@ async def to_code(config):
             config[CONF_CHARGE_PRIORITY], CHARGE_PRIORITY_OPTIONS, REG_CHARGE_PRIORITY, hub
         )
         cg.add(hub.set_charge_priority_select(sel))
+
+    if CONF_BATTERY_TYPE in config:
+        sel = await _make_select(
+            config[CONF_BATTERY_TYPE], BATTERY_TYPE_OPTIONS, REG_BATTERY_TYPE, hub
+        )
+        cg.add(hub.set_battery_type_select(sel))

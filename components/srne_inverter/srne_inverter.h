@@ -101,6 +101,11 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
 
   // Switches (write-back via Modbus function 0x06; on=1, off=0)
   void set_eco_mode_switch(switch_::Switch *s) { eco_mode_switch_ = s; }
+  void set_overload_auto_restart_switch(switch_::Switch *s) { overload_auto_restart_switch_ = s; }
+  void set_overheat_auto_restart_switch(switch_::Switch *s) { overheat_auto_restart_switch_ = s; }
+
+  // Selects
+  void set_battery_type_select(select::Select *s) { battery_type_select_ = s; }
 
   // Exposed so the SrneSelect / SrneNumber subclasses can ask the hub to
   // write back a value when the user changes a control in HA.
@@ -200,8 +205,13 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   number::Number *mains_charge_current_limit_number_{nullptr};
   number::Number *output_voltage_number_{nullptr};
 
-  // Switches (writable, read back from settings block F4)
+  // Switches (writable, read back from settings block F4/F6)
   switch_::Switch *eco_mode_switch_{nullptr};
+  switch_::Switch *overload_auto_restart_switch_{nullptr};
+  switch_::Switch *overheat_auto_restart_switch_{nullptr};
+
+  // Battery type select (writable, read back from a single-reg block at 0xE004)
+  select::Select *battery_type_select_{nullptr};
 
   uint8_t no_response_count_{0};
   uint32_t update_counter_{0};
@@ -228,6 +238,8 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void decode_block_b3_(const uint8_t *payload, size_t byte_count);
   void decode_block_f4_(const uint8_t *payload, size_t byte_count);
   void decode_block_f5_(const uint8_t *payload, size_t byte_count);
+  void decode_block_f6_(const uint8_t *payload, size_t byte_count);
+  void decode_block_g_(const uint8_t *payload, size_t byte_count);
   void decode_block_c_(const uint8_t *payload, size_t byte_count);
   void decode_block_d_(const uint8_t *payload, size_t byte_count);
   void decode_block_e_(const uint8_t *payload, size_t byte_count);

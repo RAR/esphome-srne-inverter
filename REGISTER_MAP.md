@@ -79,6 +79,32 @@ Populates only when the inverter is actively outputting on both legs (i.e. not i
 
 If the mode hasn't been read yet (first ~5 min after boot) `inverter_voltage_l1_l2` stays unknown rather than publish a misleading value.
 
+### Block F6 — auto-restart switches (`0xE20D`–`0xE20E`, 2 regs)
+
+Polled only if `overload_auto_restart` or `overheat_auto_restart` switch is configured. Per §5.2 menu items 23 and 24 of the SRNE 12KW user manual.
+
+| Reg | Name | Values | Entity |
+|---|---|---|---|
+| 0xE20D | Overload auto restart | 0=disable, 1=enable | `switch.overload_auto_restart` |
+| 0xE20E | Over-temperature auto restart | 0=disable, 1=enable | `switch.overheat_auto_restart` |
+
+### Block G — Battery type (`0xE004`, 1 reg)
+
+Polled only if `battery_type` select is configured. Per §5.2 menu item 08 of the user manual.
+
+| Raw | Type |
+|---|---|
+| 0 | User-defined |
+| 1 | Sealed lead-acid |
+| 2 | Flooded lead-acid |
+| 3 | Gel |
+| 6 | LFP L14 |
+| 7 | LFP L15 |
+| 8 | LFP L16 |
+| 13 | Ternary Li-ion N13 |
+| 14 | Ternary Li-ion N14 |
+| (4, 5, 9-12) | Reserved |
+
 ### Block F5 — AC Output Phase Mode (`0xE21E`, 1 reg, polled if `inverter_voltage_l1_l2` or `split_phase_mode` is configured)
 
 | Reg | Name | Type | Values | Sensor |
