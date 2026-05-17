@@ -132,7 +132,7 @@ sensor:
       name: "Battery Voltage"
       id: inv_battery_voltage
     battery_current:
-      name: "Battery Current"
+      name: "Battery Discharge Current"
       id: inv_battery_current
 
     pv1_voltage: { name: "PV1 Voltage" }
