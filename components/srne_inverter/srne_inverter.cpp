@@ -231,6 +231,7 @@ void SrneInverter::dump_config() {
   LOG_SENSOR("  ", "Battery SOC", this->battery_soc_sensor_);
   LOG_SENSOR("  ", "Battery V", this->battery_voltage_sensor_);
   LOG_SENSOR("  ", "Battery A", this->battery_current_sensor_);
+  LOG_SENSOR("  ", "Battery W", this->battery_power_sensor_);
   LOG_SENSOR("  ", "PV1 V", this->pv1_voltage_sensor_);
   LOG_SENSOR("  ", "PV1 A", this->pv1_current_sensor_);
   LOG_SENSOR("  ", "PV1 W", this->pv1_power_sensor_);
@@ -592,8 +593,13 @@ void SrneInverter::decode_block_a_(const uint8_t *p, size_t /*byte_count*/) {
   // Layout (each register is 2 bytes; offset = (reg - 0x0100) * 2)
   // 0x0100 SOC | 0x0101 V x0.1 | 0x0102 I x0.1 signed | ...
   this->publish_state_(this->battery_soc_sensor_, (float) get_u16(p, 0));
-  this->publish_state_(this->battery_voltage_sensor_, get_u16(p, 2) * 0.1f);
-  this->publish_state_(this->battery_current_sensor_, get_i16(p, 4) * 0.1f);
+  float battery_v = get_u16(p, 2) * 0.1f;
+  float battery_a = get_i16(p, 4) * 0.1f;
+  this->publish_state_(this->battery_voltage_sensor_, battery_v);
+  this->publish_state_(this->battery_current_sensor_, battery_a);
+  // Derived: positive = charging, negative = discharging (matches the
+  // sign convention on battery_current).
+  this->publish_state_(this->battery_power_sensor_, battery_v * battery_a);
   // 0x0103 device temp (skip), 0x0104-0x0106 DC load (gray, skip)
   // 0x0107 PV1 V, 0x0108 PV1 I, 0x0109 PV1 W
   this->publish_state_(this->pv1_voltage_sensor_, get_u16(p, 14) * 0.1f);

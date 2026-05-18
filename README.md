@@ -34,6 +34,7 @@ Entities marked *diagnostic* are placed under the **Diagnostic** section of the 
 | `battery_soc` | `86 %` | `0x0100` | |
 | `battery_voltage` | `53.4 V` | `0x0101` | |
 | `battery_current` | `1.7 A` | `0x0102` | signed; negative = discharging. `atoms3r-example.yaml` exposes this as **"Battery Discharge Current"** |
+| `battery_power` | `90.8 W` | derived | `battery_voltage × battery_current`; signed (positive = charging, negative = discharging). Not exposed as a Modbus register — derived in the component. |
 | `battery_charge_current` | `0.0 A` | `0x021E` | mains-side charge current |
 | `pv_charge_current` | `0.0 A` | `0x0224` | PV-side charge current |
 | `charge_power` | `0 W` | `0x010E` | mains + PV combined |

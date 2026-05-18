@@ -24,6 +24,9 @@ DEPENDENCIES = ["srne_inverter"]
 CONF_BATTERY_SOC = "battery_soc"
 CONF_BATTERY_VOLTAGE = "battery_voltage"
 CONF_BATTERY_CURRENT = "battery_current"
+# Derived: battery_voltage × battery_current. Signed — positive when the
+# battery is being charged, negative when discharging.
+CONF_BATTERY_POWER = "battery_power"
 CONF_PV1_VOLTAGE = "pv1_voltage"
 CONF_PV1_CURRENT = "pv1_current"
 CONF_PV1_POWER = "pv1_power"
@@ -117,6 +120,7 @@ CONFIG_SCHEMA = SRNE_INVERTER_COMPONENT_SCHEMA.extend(
         cv.Optional(CONF_BATTERY_SOC): PERCENT_SCHEMA,
         cv.Optional(CONF_BATTERY_VOLTAGE): VOLTAGE_SCHEMA,
         cv.Optional(CONF_BATTERY_CURRENT): CURRENT_SCHEMA,
+        cv.Optional(CONF_BATTERY_POWER): POWER_SCHEMA,
         cv.Optional(CONF_PV1_VOLTAGE): VOLTAGE_SCHEMA,
         cv.Optional(CONF_PV1_CURRENT): CURRENT_SCHEMA,
         cv.Optional(CONF_PV1_POWER): POWER_SCHEMA,
@@ -166,6 +170,7 @@ async def to_code(config):
         CONF_BATTERY_SOC: hub.set_battery_soc_sensor,
         CONF_BATTERY_VOLTAGE: hub.set_battery_voltage_sensor,
         CONF_BATTERY_CURRENT: hub.set_battery_current_sensor,
+        CONF_BATTERY_POWER: hub.set_battery_power_sensor,
         CONF_PV1_VOLTAGE: hub.set_pv1_voltage_sensor,
         CONF_PV1_CURRENT: hub.set_pv1_current_sensor,
         CONF_PV1_POWER: hub.set_pv1_power_sensor,

@@ -30,6 +30,7 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   void set_battery_soc_sensor(sensor::Sensor *s) { battery_soc_sensor_ = s; }
   void set_battery_voltage_sensor(sensor::Sensor *s) { battery_voltage_sensor_ = s; }
   void set_battery_current_sensor(sensor::Sensor *s) { battery_current_sensor_ = s; }
+  void set_battery_power_sensor(sensor::Sensor *s) { battery_power_sensor_ = s; }
   void set_pv1_voltage_sensor(sensor::Sensor *s) { pv1_voltage_sensor_ = s; }
   void set_pv1_current_sensor(sensor::Sensor *s) { pv1_current_sensor_ = s; }
   void set_pv1_power_sensor(sensor::Sensor *s) { pv1_power_sensor_ = s; }
@@ -130,6 +131,7 @@ class SrneInverter : public PollingComponent, public srne_modbus::SrneModbusDevi
   sensor::Sensor *battery_soc_sensor_{nullptr};
   sensor::Sensor *battery_voltage_sensor_{nullptr};
   sensor::Sensor *battery_current_sensor_{nullptr};
+  sensor::Sensor *battery_power_sensor_{nullptr};
   sensor::Sensor *pv1_voltage_sensor_{nullptr};
   sensor::Sensor *pv1_current_sensor_{nullptr};
   sensor::Sensor *pv1_power_sensor_{nullptr};

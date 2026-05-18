@@ -134,6 +134,11 @@ sensor:
     battery_current:
       name: "Battery Discharge Current"
       id: inv_battery_current
+    # Derived: battery_voltage × battery_current. Positive = charging,
+    # negative = discharging (matches battery_current's sign convention).
+    battery_power:
+      name: "Battery Power"
+      id: inv_battery_power
 
     pv1_voltage: { name: "PV1 Voltage" }
     pv1_current: { name: "PV1 Current" }
