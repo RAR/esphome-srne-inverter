@@ -34,6 +34,11 @@ class SrneModbus : public uart::UARTDevice, public Component {
   // Function 0x06: write a single 16-bit register.
   void send_write_single(uint8_t address, uint16_t register_address, uint16_t value);
 
+  // The request that is currently on the wire (or was most recently). Useful
+  // for devices that want to log which register an error response is for.
+  uint8_t get_in_flight_function() const { return in_flight_function_; }
+  uint16_t get_in_flight_register() const { return in_flight_register_; }
+
  protected:
   bool parse_modbus_byte_(uint8_t byte);
   void send_next_request_();

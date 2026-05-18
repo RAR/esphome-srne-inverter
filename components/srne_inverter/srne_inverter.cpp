@@ -467,7 +467,23 @@ void SrneInverter::on_modbus_data(const std::vector<uint8_t> &data) {
         ESP_LOGW(TAG, "SCAN ERROR 0x%02X but scan queue is empty", err_code);
       }
     } else {
-      ESP_LOGW(TAG, "Modbus error response: 0x%02X", err_code);
+      const char *err_name;
+      switch (err_code) {
+        case 0x01: err_name = "illegal function"; break;
+        case 0x02: err_name = "illegal data address"; break;
+        case 0x03: err_name = "illegal data value"; break;
+        case 0x04: err_name = "device failure"; break;
+        case 0x05: err_name = "password check address wrong"; break;
+        case 0x07: err_name = "parameter is read-only"; break;
+        case 0x08: err_name = "parameter cannot be changed while running"; break;
+        case 0x09: err_name = "user password set but not unlocked (write 0xE203)"; break;
+        case 0x0B: err_name = "permission denied"; break;
+        default:   err_name = "unknown"; break;
+      }
+      uint8_t  in_fn  = this->parent_->get_in_flight_function();
+      uint16_t in_reg = this->parent_->get_in_flight_register();
+      ESP_LOGW(TAG, "Modbus error 0x%02X (%s) on fn=0x%02X reg=0x%04X",
+               err_code, err_name, in_fn, in_reg);
     }
     return;
   }
@@ -978,7 +994,7 @@ void SrneSelect::control(const std::string &value) {
   auto &options = this->traits.get_options();
   for (size_t i = 0; i < options.size(); i++) {
     if (options[i] == value) {
-      ESP_LOGD("srne_select", "Writing 0x%04X = %u (%s)", this->register_, (unsigned) i, value.c_str());
+      ESP_LOGI("srne_select", "Writing 0x%04X = %u (%s)", this->register_, (unsigned) i, value.c_str());
       this->parent_->write_register(this->register_, static_cast<uint16_t>(i));
       this->publish_state(value);  // optimistic; next F-block read confirms
       return;
@@ -1000,7 +1016,7 @@ void SrneSelect::publish_from_raw(uint16_t raw) {
 void SrneNumber::control(float value) {
   // HA-side value → raw register. scale=0.1 means raw = value/0.1 = value*10.
   uint16_t raw = static_cast<uint16_t>((value / this->scale_) + 0.5f);
-  ESP_LOGD("srne_number", "Writing 0x%04X = %u (%.2f)", this->register_, raw, value);
+  ESP_LOGI("srne_number", "Writing 0x%04X = %u (%.2f)", this->register_, raw, value);
   this->parent_->write_register(this->register_, raw);
   this->publish_state(value);  // optimistic
 }
@@ -1011,7 +1027,7 @@ void SrneNumber::publish_from_raw(uint16_t raw) {
 
 void SrneSwitch::write_state(bool state) {
   uint16_t raw = state ? 1 : 0;
-  ESP_LOGD("srne_switch", "Writing 0x%04X = %u (%s)", this->register_, raw, state ? "ON" : "OFF");
+  ESP_LOGI("srne_switch", "Writing 0x%04X = %u (%s)", this->register_, raw, state ? "ON" : "OFF");
   this->parent_->write_register(this->register_, raw);
   this->publish_state(state);  // optimistic; next F-block read confirms
 }
