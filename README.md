@@ -99,8 +99,8 @@ All marked as Configuration entities in HA. Changing one in HA writes immediatel
 | `select.ac_input_voltage_range` | `APL` | `0xE20B` | UPS (120/110 V, 90-140 V) / APL (100/105 V, 85-140 V) |
 | `select.parallel_mode` | `SIG (single)` | `0xE201` | SIG / PAL / 2P0-2P2 / 3P1-3P3 — **only writable while inverter is shut down** (runtime writes return error 0x08) |
 | `number.output_voltage` | `120.0 V` | `0xE208` | 100-264 V |
-| `number.max_charge_current` | (slow-poll pending) | `0xE20A` | 0-150 A |
-| `number.mains_charge_current_limit` | (slow-poll pending) | `0xE205` | 0-100 A |
+| `number.max_charge_current` | (slow-poll pending) | `0xE20A` | 0-200 A (manual §5.2 item 07 "Battery charge current") |
+| `number.mains_charge_current_limit` | (slow-poll pending) | `0xE205` | 0-100 A (manual §5.2 item 28 says 0-120, but Anenji firmware empirically rejects >100) |
 | `number.soc_discharge_alarm` | (slow-poll pending) | `0xE01E` | 0-100 % — *register tentative* |
 | `number.soc_discharge_cutoff` | (slow-poll pending) | `0xE00F` | 0-100 % — *register tentative* |
 | `number.soc_charge_cutoff` | (slow-poll pending) | `0xE01D` | 0-100 % — *register tentative* |

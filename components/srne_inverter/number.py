@@ -26,8 +26,8 @@ CONF_SOC_SWITCH_TO_MAINS = "soc_switch_to_mains"
 CONF_SOC_SWITCH_TO_INVERTER = "soc_switch_to_inverter"
 
 # Register addresses + per-register defaults (kept in sync with REG_* in cpp)
-REG_MAX_CHARGE_CURRENT = 0xE20A          # 0..150 A, scale 0.1
-REG_MAINS_CHARGE_CURRENT_LIMIT = 0xE205  # 0..100 A, scale 0.1
+REG_MAX_CHARGE_CURRENT = 0xE20A          # 0..200 A per manual item 07, scale 0.1
+REG_MAINS_CHARGE_CURRENT_LIMIT = 0xE205  # 0..100 A on Anenji firmware (manual says 0..120 but firmware rejects > 100), scale 0.1
 REG_OUTPUT_VOLTAGE = 0xE208              # 100..264 V, scale 0.1
 
 # SOC thresholds (per §5.2 menu items 58-62; addresses tentative — calibrated
@@ -116,7 +116,7 @@ async def to_code(config):
         n = await _make_number(
             config[CONF_MAX_CHARGE_CURRENT],
             min_value=0,
-            max_value=150,
+            max_value=200,
             step=1,
             register_addr=REG_MAX_CHARGE_CURRENT,
             scale=0.1,
